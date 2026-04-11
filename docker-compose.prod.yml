@@ -1,4 +1,19 @@
 services:
+  master-service:
+    build:
+      context: ./master-service
+      dockerfile: Dockerfile.prod
+    container_name: master-service
+    ports:
+      - "28082:8080"
+    environment:
+      RESUME_ANALYZER_BASE_URL: http://resume-analyzer:8080
+      CODING_ANALYZER_BASE_URL: http://coding-analyzer:8080
+    depends_on:
+      - resume-analyzer
+      - coding-analyzer
+    restart: unless-stopped
+
   coding-analyzer:
     build:
       context: ./coding-analyzer

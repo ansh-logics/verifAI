@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VeriAI — Profile analysis</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.5;
+      color: #1a1a1a;
+      background: #f4f4f5;
+    }
+    body { margin: 0; padding: 1.5rem; max-width: 56rem; margin-inline: auto; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 1rem; }
+    fieldset {
+      border: 1px solid #d4d4d8;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 0 0 1rem;
+      background: #fff;
+    }
+    legend { padding: 0 0.35rem; font-weight: 600; font-size: 0.9rem; }
+    label { display: block; font-size: 0.85rem; margin-bottom: 0.35rem; color: #3f3f46; }
+    input[type="text"], input[type="file"] {
+      width: 100%;
+      max-width: 28rem;
+      padding: 0.5rem 0.6rem;
+      border: 1px solid #d4d4d8;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+    }
+    .row { margin-bottom: 0.75rem; }
+    button {
+      background: #18181b;
+      color: #fff;
+      border: none;
+      padding: 0.55rem 1.1rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .banner {
+      padding: 0.65rem 0.85rem;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+      font-size: 0.9rem;
+    }
+    .banner.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .banner.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .banner.ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+    pre {
+      background: #18181b;
+      color: #e4e4e7;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.8rem;
+      margin: 0;
+    }
+    section h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+    #loading { display: none; font-size: 0.9rem; color: #52525b; margin-bottom: 0.75rem; }
+    #loading.active { display: block; }
+  </style>
+</head>
+<body>
+  <h1>Combined profile analysis</h1>
+  <p style="color:#52525b;font-size:0.9rem;margin:0 0 1rem;">
+    Upload a resume (PDF or DOCX) and optionally add coding platform usernames. Both downstream services run in parallel.
+  </p>
+
+  <form id="form">
+    <fieldset>
+      <legend>Resume</legend>
+      <div class="row">
+        <label for="file">Resume file</label>
+        <input id="file" name="file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Coding platforms</legend>
+      <p style="font-size:0.85rem;color:#71717a;margin:0 0 0.75rem;">Provide at least one username to analyze coding profiles.</p>
+      <div class="row">
+        <label for="github_username">GitHub</label>
+        <input id="github_username" name="github_username" type="text" placeholder="username or profile URL" autocomplete="off" />
+      </div>
+      <div class="row">
+        <label for="leetcode_username">LeetCode</label>
+        <input id="leetcode_username" name="leetcode_username" type="text" placeholder="username" autocomplete="off" />
+      </div>
+      <div class="row">
+        <label for="codeforces_username">Codeforces</label>
+        <input id="codeforces_username" name="codeforces_username" type="text" placeholder="handle" autocomplete="off" />
+      </div>
+    </fieldset>
+    <button type="submit" id="submit">Run analysis</button>
+  </form>
+
+  <div id="loading" aria-live="polite">Running resume and coding analyzers…</div>
+
+  <section id="out" style="display:none;">
+    <h2>Report</h2>
+    <div id="banners"></div>
+    <div id="blocks"></div>
+  </section>
+
+  <script>
+    const form = document.getElementById("form");
+    const loading = document.getElementById("loading");
+    const out = document.getElementById("out");
+    const banners = document.getElementById("banners");
+    const blocks = document.getElementById("blocks");
+
+    function esc(s) {
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      loading.classList.add("active");
+      out.style.display = "none";
+      banners.innerHTML = "";
+      blocks.innerHTML = "";
+      document.getElementById("submit").disabled = true;
+
+      const fd = new FormData(form);
+      try {
+        const res = await fetch("/analyze-profile", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+
+        banners.innerHTML = "";
+        if (!res.ok && res.status !== 502) {
+          const detail = data.detail != null ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)) : res.statusText;
+          banners.innerHTML = `<div class="banner error">Request failed (${res.status}): ${esc(detail)}</div>`;
+          out.style.display = "block";
+          return;
+        }
+
+        if (data.resume_error) {
+          banners.innerHTML += `<div class="banner error"><strong>Resume analyzer</strong> — ${esc(data.resume_error)}</div>`;
+        } else if (data.resume_ok) {
+          banners.innerHTML += `<div class="banner ok"><strong>Resume analyzer</strong> — completed.</div>`;
+        }
+        if (data.coding_skipped) {
+          banners.innerHTML += `<div class="banner warn"><strong>Coding analyzer</strong> — skipped: ${esc(data.coding_error || "")}</div>`;
+        } else if (data.coding_error) {
+          banners.innerHTML += `<div class="banner error"><strong>Coding analyzer</strong> — ${esc(data.coding_error)}</div>`;
+        } else if (data.coding_ok) {
+          banners.innerHTML += `<div class="banner ok"><strong>Coding analyzer</strong> — completed.</div>`;
+        }
+
+        blocks.innerHTML = "";
+        if (data.resume) {
+          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Resume (JSON)</h3><pre>" + esc(JSON.stringify(data.resume, null, 2)) + "</pre>";
+        }
+        if (data.coding) {
+          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Coding profile (JSON)</h3><pre>" + esc(JSON.stringify(data.coding, null, 2)) + "</pre>";
+        }
+        if (res.status === 502) {
+          banners.innerHTML = `<div class="banner error"><strong>Both services failed.</strong> See messages above.</div>` + banners.innerHTML;
+        }
+        out.style.display = "block";
+      } catch (err) {
+        banners.innerHTML = `<div class="banner error">${esc(err && err.message ? err.message : "Network error")}</div>`;
+        out.style.display = "block";
+      } finally {
+        loading.classList.remove("active");
+        document.getElementById("submit").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

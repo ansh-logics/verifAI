@@ -1,4 +1,21 @@
 services:
+  master-service-dev:
+    build:
+      context: ./master-service
+      dockerfile: Dockerfile.dev
+    container_name: master-service-dev
+    ports:
+      - "18082:8080"
+    environment:
+      RESUME_ANALYZER_BASE_URL: http://resume-analyzer-dev:8080
+      CODING_ANALYZER_BASE_URL: http://coding-analyzer-dev:8080
+    depends_on:
+      - resume-analyzer-dev
+      - coding-analyzer-dev
+    volumes:
+      - ./master-service:/app
+    restart: unless-stopped
+
   coding-analyzer-dev:
     build:
       context: ./coding-analyzer

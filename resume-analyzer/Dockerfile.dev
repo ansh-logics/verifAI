@@ -1,12 +1,17 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.11-slim
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Pip defaults are often too low for large wheels on slow/unstable networks (PyPI).
+ENV PIP_DEFAULT_TIMEOUT=300
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 300 --retries 10 -r /tmp/requirements.txt \
+    && python -m spacy download en_core_web_sm
 
 COPY . /app
 
