@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,25 @@ TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / 
 MAX_RESUME_BYTES = 8 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 ALLOWED_MARKSHEET_EXTENSIONS = {".pdf"}
+RESUME_FORBIDDEN_NAME_TOKENS = ("marksheet", "one view", "result")
+MARKSHEET_FORBIDDEN_NAME_TOKENS = ("resume", "cv")
+
+
+def _bytes_text_lower(data: bytes) -> str:
+    # Best-effort text sniffing for quick role validation.
+    return data.decode("utf-8", errors="ignore").lower()
+
+
+def _looks_like_marksheet(data: bytes) -> bool:
+    t = _bytes_text_lower(data)
+    anchors = ("aktu-one-view", "student result", "sgpa", "rollno", "enrollmentno", "semester")
+    return sum(1 for a in anchors if a in t) >= 2
+
+
+def _looks_like_resume(data: bytes) -> bool:
+    t = _bytes_text_lower(data)
+    anchors = ("education", "experience", "skills", "projects", "certifications", "summary")
+    return sum(1 for a in anchors if a in t) >= 2
 
 
 @dataclass
@@ -81,11 +101,23 @@ async def analyze_profile(
             detail="Unsupported file type. Please upload PDF or DOCX.",
         )
 
+    resume_name_lower = (file.filename or "").lower()
+    if any(token in resume_name_lower for token in RESUME_FORBIDDEN_NAME_TOKENS):
+        raise HTTPException(
+            status_code=400,
+            detail="Resume file appears to be a marksheet. Upload it in the marksheet field.",
+        )
+
     contents = await file.read()
     if len(contents) > MAX_RESUME_BYTES:
         raise HTTPException(
             status_code=413,
             detail="Resume file is too large (max 8 MB).",
+        )
+    if suffix == ".pdf" and _looks_like_marksheet(contents):
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded resume file looks like a marksheet PDF. Please upload a valid resume.",
         )
 
     gh = github_username.strip() or None
@@ -97,6 +129,12 @@ async def analyze_profile(
     marksheet_filename = "marksheet.pdf"
     marksheet_content_type: str | None = None
     if has_marksheet and marksheet_file is not None:
+        marksheet_name_lower = (marksheet_file.filename or "").lower()
+        if any(token in marksheet_name_lower for token in MARKSHEET_FORBIDDEN_NAME_TOKENS):
+            raise HTTPException(
+                status_code=400,
+                detail="Marksheet file name looks like a resume. Upload the resume in the resume field.",
+            )
         marksheet_suffix = Path(marksheet_file.filename or "").suffix.lower()
         if marksheet_suffix not in ALLOWED_MARKSHEET_EXTENSIONS:
             raise HTTPException(
@@ -108,6 +146,21 @@ async def analyze_profile(
             raise HTTPException(
                 status_code=413,
                 detail="Marksheet file is too large (max 8 MB).",
+            )
+        if hashlib.sha256(contents).digest() == hashlib.sha256(marksheet_contents).digest():
+            raise HTTPException(
+                status_code=400,
+                detail="Resume and marksheet files cannot be the same file.",
+            )
+        if not _looks_like_marksheet(marksheet_contents):
+            if _looks_like_resume(marksheet_contents):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Uploaded marksheet file looks like a resume. Please upload a valid marksheet PDF.",
+                )
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded marksheet file does not look like a valid marksheet PDF.",
             )
         marksheet_filename = marksheet_file.filename or "marksheet.pdf"
         marksheet_content_type = marksheet_file.content_type
