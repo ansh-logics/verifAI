@@ -79,3 +79,28 @@ async def call_coding_analyzer(
         return None, f"Coding analyzer returned {exc.response.status_code}: {detail}"
     except Exception as exc:
         return None, _error_from_httpx(exc)
+
+
+async def call_marksheet_analyzer(
+    *,
+    settings: Settings,
+    client: httpx.AsyncClient,
+    file_bytes: bytes,
+    filename: str,
+    content_type: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    url = f"{settings.marksheet_base}/analyze-marksheet"
+    files = {"file": (filename or "marksheet.pdf", file_bytes, content_type or "application/pdf")}
+    try:
+        response = await client.post(
+            url,
+            files=files,
+            timeout=settings.marksheet_http_timeout_s,
+        )
+        response.raise_for_status()
+        return response.json(), None
+    except httpx.HTTPStatusError as exc:
+        detail = _http_error_detail(exc.response)
+        return None, f"Marksheet analyzer returned {exc.response.status_code}: {detail}"
+    except Exception as exc:
+        return None, _error_from_httpx(exc)

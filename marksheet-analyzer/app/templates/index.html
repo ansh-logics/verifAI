@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VeriAI Marksheet Analyzer</title>
+    <style>
+      :root {
+        --bg: #f3f7fb;
+        --card: #ffffff;
+        --text: #10253f;
+        --accent: #0f7b9f;
+        --muted: #5f7285;
+        --error: #b62d2d;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: radial-gradient(circle at top, #d9edf7 0%, var(--bg) 45%);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      .container {
+        width: min(900px, 92vw);
+        margin: 48px auto;
+        background: var(--card);
+        border-radius: 16px;
+        box-shadow: 0 12px 36px rgba(16, 37, 63, 0.14);
+        padding: 28px;
+      }
+      h1 { margin: 0 0 10px; font-size: 1.7rem; }
+      p { margin: 0 0 18px; color: var(--muted); }
+      form { display: grid; gap: 12px; }
+      input[type="file"] {
+        border: 1px dashed #b5ccdc;
+        padding: 14px;
+        border-radius: 10px;
+        background: #f9fdff;
+      }
+      button {
+        width: fit-content;
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent);
+        color: white;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.65; cursor: not-allowed; }
+      .status { min-height: 20px; margin-top: 8px; color: var(--muted); }
+      .status.error { color: var(--error); }
+      pre {
+        margin-top: 18px;
+        background: #0f1c2d;
+        color: #d6f0ff;
+        border-radius: 12px;
+        padding: 16px;
+        overflow-x: auto;
+        font-size: 0.86rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <h1>VeriAI Marksheet Analyzer</h1>
+      <p>Upload an AKTU One View PDF marksheet. SGPA is parsed from the PDF and CGPA is computed from latest attempts.</p>
+
+      <form id="uploadForm">
+        <input type="file" id="marksheetFile" name="file" accept=".pdf,application/pdf" required />
+        <button type="submit" id="submitBtn">Analyze Marksheet</button>
+      </form>
+
+      <div id="status" class="status"></div>
+      <pre id="output">{
+  "candidate": {},
+  "cgpa_computed": null,
+  "last_semester_number": null,
+  "last_semester_sgpa": null,
+  "backlog": {
+    "has_active_backlog": false,
+    "active_backlog_codes": [],
+    "active_backlog_count": 0
+  }
+}</pre>
+    </main>
+
+    <script>
+      const form = document.getElementById("uploadForm");
+      const statusNode = document.getElementById("status");
+      const outputNode = document.getElementById("output");
+      const submitBtn = document.getElementById("submitBtn");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const fileInput = document.getElementById("marksheetFile");
+        if (!fileInput.files.length) {
+          statusNode.textContent = "Select a PDF first.";
+          statusNode.className = "status error";
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        statusNode.textContent = "Analyzing marksheet...";
+        statusNode.className = "status";
+        submitBtn.disabled = true;
+
+        try {
+          const response = await fetch("/analyze-marksheet", {
+            method: "POST",
+            body: formData,
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.detail || "Failed to analyze marksheet.");
+          }
+
+          outputNode.textContent = JSON.stringify(payload, null, 2);
+          statusNode.textContent = "Analysis complete.";
+          statusNode.className = "status";
+        } catch (error) {
+          statusNode.textContent = error.message;
+          statusNode.className = "status error";
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

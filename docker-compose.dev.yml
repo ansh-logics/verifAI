@@ -9,6 +9,7 @@ services:
     environment:
       RESUME_ANALYZER_BASE_URL: http://resume-analyzer-dev:8080
       CODING_ANALYZER_BASE_URL: http://coding-analyzer-dev:8080
+      MARKSHEET_ANALYZER_BASE_URL: http://marksheet-analyzer-dev:8080
     depends_on:
       - resume-analyzer-dev
       - coding-analyzer-dev
@@ -36,4 +37,15 @@ services:
       - "18081:8080"
     volumes:
       - ./resume-analyzer:/app
+    restart: unless-stopped
+
+  marksheet-analyzer-dev:
+    build:
+      context: ./marksheet-analyzer
+      dockerfile: Dockerfile.dev
+    container_name: marksheet-analyzer-dev
+    ports:
+      - "18083:8080"
+    volumes:
+      - ./marksheet-analyzer:/app
     restart: unless-stopped

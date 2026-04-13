@@ -11,14 +11,20 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
-from app.models.report import MasterAnalysisReport
-from app.services.downstream import DEFAULT_HEADERS, call_coding_analyzer, call_resume_analyzer
+from app.services.downstream import (
+    DEFAULT_HEADERS,
+    call_coding_analyzer,
+    call_marksheet_analyzer,
+    call_resume_analyzer,
+)
+from app.services.payload_builder import build_master_report
 
 router = APIRouter()
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
 
 MAX_RESUME_BYTES = 8 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+ALLOWED_MARKSHEET_EXTENSIONS = {".pdf"}
 
 
 @dataclass
@@ -29,6 +35,13 @@ class ResumeOutcome:
 
 @dataclass
 class CodingOutcome:
+    data: dict[str, Any] | None
+    error: str | None
+    skipped: bool
+
+
+@dataclass
+class MarksheetOutcome:
     data: dict[str, Any] | None
     error: str | None
     skipped: bool
@@ -47,11 +60,20 @@ async def health() -> dict[str, str]:
 @router.post("/analyze-profile")
 async def analyze_profile(
     file: UploadFile = File(...),
+    marksheet_file: UploadFile | None = File(None),
+    branch: str = Form(""),
     github_username: str = Form(""),
     leetcode_username: str = Form(""),
     codeforces_username: str = Form(""),
 ) -> JSONResponse:
     settings = get_settings()
+    branch_stripped = branch.strip()
+    if not branch_stripped:
+        raise HTTPException(
+            status_code=400,
+            detail="Branch is required.",
+        )
+
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -70,6 +92,25 @@ async def analyze_profile(
     lc = leetcode_username.strip() or None
     cf = codeforces_username.strip() or None
     has_coding = bool(gh or lc or cf)
+    has_marksheet = marksheet_file is not None and bool((marksheet_file.filename or "").strip())
+    marksheet_contents: bytes | None = None
+    marksheet_filename = "marksheet.pdf"
+    marksheet_content_type: str | None = None
+    if has_marksheet and marksheet_file is not None:
+        marksheet_suffix = Path(marksheet_file.filename or "").suffix.lower()
+        if marksheet_suffix not in ALLOWED_MARKSHEET_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported marksheet type. Please upload PDF.",
+            )
+        marksheet_contents = await marksheet_file.read()
+        if len(marksheet_contents) > MAX_RESUME_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Marksheet file is too large (max 8 MB).",
+            )
+        marksheet_filename = marksheet_file.filename or "marksheet.pdf"
+        marksheet_content_type = marksheet_file.content_type
 
     async def run_resume() -> ResumeOutcome:
         async with httpx.AsyncClient(headers=DEFAULT_HEADERS) as client:
@@ -102,23 +143,66 @@ async def analyze_profile(
             )
         return CodingOutcome(data=data, error=err, skipped=False)
 
-    resume_out, coding_out = await asyncio.gather(run_resume(), run_coding())
+    async def run_marksheet() -> MarksheetOutcome:
+        if not has_marksheet or marksheet_contents is None:
+            return MarksheetOutcome(
+                data=None,
+                error="Marksheet not provided.",
+                skipped=True,
+            )
+        async with httpx.AsyncClient(headers=DEFAULT_HEADERS) as client:
+            data, err = await call_marksheet_analyzer(
+                settings=settings,
+                client=client,
+                file_bytes=marksheet_contents,
+                filename=marksheet_filename,
+                content_type=marksheet_content_type,
+            )
+        return MarksheetOutcome(data=data, error=err, skipped=False)
 
-    report = MasterAnalysisReport()
-    report.resume_ok = resume_out.data is not None
-    report.resume = resume_out.data
-    report.resume_error = resume_out.error
+    resume_out, coding_out, marksheet_out = await asyncio.gather(run_resume(), run_coding(), run_marksheet())
 
+    resume_ok = resume_out.data is not None
     if coding_out.skipped:
-        report.coding_skipped = True
-        report.coding_ok = False
-        report.coding = None
-        report.coding_error = coding_out.error
+        coding_skipped = True
+        coding_ok = False
+        coding_data: dict[str, Any] | None = None
+        coding_error = coding_out.error
     else:
-        report.coding_skipped = False
-        report.coding_ok = coding_out.data is not None
-        report.coding = coding_out.data
-        report.coding_error = coding_out.error
+        coding_skipped = False
+        coding_ok = coding_out.data is not None
+        coding_data = coding_out.data
+        coding_error = coding_out.error
+
+    if marksheet_out.skipped:
+        marksheet_skipped = True
+        marksheet_ok = False
+        marksheet_data: dict[str, Any] | None = None
+        marksheet_error = marksheet_out.error
+    else:
+        marksheet_skipped = False
+        marksheet_ok = marksheet_out.data is not None
+        marksheet_data = marksheet_out.data
+        marksheet_error = marksheet_out.error
+
+    report = build_master_report(
+        resume=resume_out.data,
+        coding=coding_data,
+        marksheet=marksheet_data,
+        branch=branch_stripped,
+        github_username=gh,
+        leetcode_username=lc,
+        codeforces_username=cf,
+        resume_filename=file.filename,
+        resume_ok=resume_ok,
+        resume_error=resume_out.error,
+        coding_ok=coding_ok,
+        coding_skipped=coding_skipped,
+        coding_error=coding_error,
+        marksheet_ok=marksheet_ok,
+        marksheet_skipped=marksheet_skipped,
+        marksheet_error=marksheet_error,
+    )
 
     resume_failed = resume_out.data is None
     coding_failed = has_coding and coding_out.data is None

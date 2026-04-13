@@ -68,15 +68,29 @@
 <body>
   <h1>Combined profile analysis</h1>
   <p style="color:#52525b;font-size:0.9rem;margin:0 0 1rem;">
-    Upload a resume (PDF or DOCX) and optionally add coding platform usernames. Both downstream services run in parallel.
+    Upload a resume (PDF or DOCX), optionally a marksheet PDF, and coding usernames. Downstream services run in parallel.
   </p>
 
   <form id="form">
+    <fieldset>
+      <legend>Placement</legend>
+      <div class="row">
+        <label for="branch">Branch</label>
+        <input id="branch" name="branch" type="text" required placeholder="e.g. CSE" autocomplete="off" />
+      </div>
+    </fieldset>
     <fieldset>
       <legend>Resume</legend>
       <div class="row">
         <label for="file">Resume file</label>
         <input id="file" name="file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Marksheet (optional)</legend>
+      <div class="row">
+        <label for="marksheet_file">Marksheet PDF</label>
+        <input id="marksheet_file" name="marksheet_file" type="file" accept=".pdf,application/pdf" />
       </div>
     </fieldset>
     <fieldset>
@@ -98,7 +112,7 @@
     <button type="submit" id="submit">Run analysis</button>
   </form>
 
-  <div id="loading" aria-live="polite">Running resume and coding analyzers…</div>
+  <div id="loading" aria-live="polite">Running resume, marksheet, and coding analyzers…</div>
 
   <section id="out" style="display:none;">
     <h2>Report</h2>
@@ -150,13 +164,26 @@
         } else if (data.coding_ok) {
           banners.innerHTML += `<div class="banner ok"><strong>Coding analyzer</strong> — completed.</div>`;
         }
+        if (data.marksheet_skipped) {
+          banners.innerHTML += `<div class="banner warn"><strong>Marksheet analyzer</strong> — skipped: ${esc(data.marksheet_error || "")}</div>`;
+        } else if (data.marksheet_error) {
+          banners.innerHTML += `<div class="banner error"><strong>Marksheet analyzer</strong> — ${esc(data.marksheet_error)}</div>`;
+        } else if (data.marksheet_ok) {
+          banners.innerHTML += `<div class="banner ok"><strong>Marksheet analyzer</strong> — completed.</div>`;
+        }
 
         blocks.innerHTML = "";
-        if (data.resume) {
-          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Resume (JSON)</h3><pre>" + esc(JSON.stringify(data.resume, null, 2)) + "</pre>";
+        if (data.student) {
+          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Student (TPO)</h3><pre>" + esc(JSON.stringify(data.student, null, 2)) + "</pre>";
         }
-        if (data.coding) {
-          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Coding profile (JSON)</h3><pre>" + esc(JSON.stringify(data.coding, null, 2)) + "</pre>";
+        if (data.academics) {
+          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Academics (marksheet)</h3><pre>" + esc(JSON.stringify(data.academics, null, 2)) + "</pre>";
+        }
+        if (data.profile) {
+          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Profile (normalized)</h3><pre>" + esc(JSON.stringify(data.profile, null, 2)) + "</pre>";
+        }
+        if (data.sources && (data.sources.resume || data.sources.coding || data.sources.marksheet)) {
+          blocks.innerHTML += "<h3 style=\"font-size:0.95rem;margin:0.75rem 0 0.35rem;\">Sources (raw downstream)</h3><pre>" + esc(JSON.stringify(data.sources, null, 2)) + "</pre>";
         }
         if (res.status === 502) {
           banners.innerHTML = `<div class="banner error"><strong>Both services failed.</strong> See messages above.</div>` + banners.innerHTML;
