@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VerifAI - AI Placement Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-container": "#61646e",
+                    "error-container": "#ffdad6",
+                    "primary-fixed-dim": "#c1c1ff",
+                    "outline": "#777585",
+                    "surface-bright": "#f9f9f9",
+                    "background": "#f9f9f9",
+                    "surface-container-low": "#f3f3f3",
+                    "on-error": "#ffffff",
+                    "primary-fixed": "#e2dfff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-background": "#1a1c1c",
+                    "on-tertiary-container": "#fcfcfc",
+                    "on-tertiary-fixed": "#1b1b1b",
+                    "inverse-on-surface": "#f1f1f1",
+                    "tertiary-container": "#747474",
+                    "secondary-fixed-dim": "#c4c6d2",
+                    "surface-dim": "#dadada",
+                    "secondary-container": "#e0e2ee",
+                    "on-primary-container": "#fffbff",
+                    "secondary": "#5b5e68",
+                    "inverse-surface": "#2f3131",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#e2e2e2",
+                    "tertiary": "#5c5c5c",
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#e8e8e8",
+                    "on-primary-fixed-variant": "#3430b6",
+                    "on-secondary-fixed-variant": "#434750",
+                    "surface-tint": "#4e4cce",
+                    "primary": "#4b49cc",
+                    "error": "#ba1a1a",
+                    "on-error-container": "#93000a",
+                    "surface-variant": "#e2e2e2",
+                    "tertiary-fixed-dim": "#c6c6c6",
+                    "primary-container": "#6564e6",
+                    "on-surface-variant": "#464554",
+                    "tertiary-fixed": "#e2e2e2",
+                    "surface": "#f9f9f9",
+                    "inverse-primary": "#c1c1ff",
+                    "on-secondary-fixed": "#181b24",
+                    "on-tertiary-fixed-variant": "#474747",
+                    "surface-container": "#eeeeee",
+                    "on-surface": "#1a1c1c",
+                    "secondary-fixed": "#e0e2ee",
+                    "outline-variant": "#c7c4d6",
+                    "on-primary-fixed": "#0b006b"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {},
+            "fontFamily": {
+                    "headline": [
+                            "Inter"
+                    ],
+                    "body": [
+                            "Inter"
+                    ],
+                    "label": [
+                            "Inter"
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body antialiased overflow-x-hidden selection:bg-primary-fixed selection:text-on-primary-fixed min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-8 h-16 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-full mt-6 mx-auto w-[92%] max-w-7xl shadow-[0_24px_48px_rgba(75,73,204,0.06)] scale-95 active:scale-90 transition-transform">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="intelligence">network_intelligence</span>
+<span class="text-xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-50 font-sans">VerifAI</span>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="font-sans tracking-tight text-sm font-medium text-indigo-600 dark:text-indigo-400 font-semibold border-b-2 border-indigo-600" href="#">Platform</a>
+<a class="font-sans tracking-tight text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-indigo-500 transition-colors duration-300" href="#">Case Studies</a>
+<a class="font-sans tracking-tight text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-indigo-500 transition-colors duration-300" href="#">Pricing</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="font-sans tracking-tight text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 transition-colors duration-300 hidden sm:block">Login</button>
+<button class="bg-gradient-to-r from-primary to-primary-container text-on-primary font-sans tracking-tight text-sm font-medium px-6 py-2 rounded-full hover:opacity-90 transition-opacity">Request Demo</button>
+</div>
+</header>
+<main class="flex-grow pt-40 pb-20 px-6 sm:px-12 max-w-[1600px] mx-auto w-full flex flex-col gap-32">
+<!-- Hero Section -->
+<section class="flex flex-col items-center text-center gap-12 max-w-4xl mx-auto">
+<div class="space-y-6">
+<h1 class="text-5xl sm:text-7xl font-headline font-extrabold tracking-[-0.02em] leading-[1.1] text-on-background">
+                    Build smarter campus placements using <span class="bg-gradient-to-r from-primary to-primary-container bg-clip-text text-transparent">AI</span>
+</h1>
+<p class="text-lg sm:text-xl text-on-surface-variant max-w-2xl mx-auto font-medium">
+                    Analyze talent, verify profiles, and rank students instantly. The intelligent engine for modern training and placement offices.
+                </p>
+</div>
+<!-- Search Input Replica -->
+<div class="w-full max-w-3xl relative group">
+<div class="absolute inset-0 bg-primary/5 rounded-[2.5rem] blur-xl group-hover:bg-primary/10 transition-colors duration-500"></div>
+<div class="relative bg-surface-container-lowest border-[1px] border-outline-variant/30 rounded-[2.5rem] p-3 flex items-center shadow-[0_24px_48px_rgba(75,73,204,0.06)] group-focus-within:border-primary/50 group-focus-within:ring-4 ring-primary-fixed transition-all duration-300">
+<span class="material-symbols-outlined text-primary ml-4 text-2xl" data-icon="search">search</span>
+<input class="w-full bg-transparent border-none focus:ring-0 text-on-surface text-lg px-4 placeholder-on-surface-variant/50" placeholder="Paste a Job Description or ask 'Find React interns with &gt;8 CGPA'" type="text"/>
+<button class="bg-gradient-to-r from-primary to-primary-container text-on-primary rounded-full px-6 py-3 font-medium flex items-center gap-2 hover:opacity-90 transition-opacity">
+                        Analyze
+                        <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Visual Workflow Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mt-8">
+<div class="bg-surface-container-low rounded-xl p-8 flex flex-col items-center text-center gap-4 border-[1px] border-white/50">
+<div class="bg-surface-container-lowest w-16 h-16 rounded-full flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-primary text-2xl" data-icon="upload_file">upload_file</span>
+</div>
+<h3 class="font-bold text-lg text-on-background">Input Data</h3>
+<p class="text-sm text-on-surface-variant">Upload resumes, transcripts, and JDs securely.</p>
+</div>
+<div class="bg-primary-fixed/30 rounded-xl p-8 flex flex-col items-center text-center gap-4 border-[1px] border-white/50 relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent"></div>
+<div class="bg-surface-container-lowest w-16 h-16 rounded-full flex items-center justify-center shadow-sm relative z-10">
+<span class="material-symbols-outlined text-primary text-2xl" data-icon="memory">memory</span>
+</div>
+<h3 class="font-bold text-lg text-on-background relative z-10">AI Analysis</h3>
+<p class="text-sm text-on-surface-variant relative z-10">Engine verifies skills and calculates match scores.</p>
+</div>
+<div class="bg-surface-container-low rounded-xl p-8 flex flex-col items-center text-center gap-4 border-[1px] border-white/50">
+<div class="bg-surface-container-lowest w-16 h-16 rounded-full flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-primary text-2xl" data-icon="format_list_numbered">format_list_numbered</span>
+</div>
+<h3 class="font-bold text-lg text-on-background">Ranked Output</h3>
+<p class="text-sm text-on-surface-variant">Get a verified, ranked list of top candidates.</p>
+</div>
+</div>
+</section>
+<!-- Features Bento Grid -->
+<section class="space-y-16">
+<div class="text-center space-y-4 max-w-2xl mx-auto">
+<h2 class="text-3xl sm:text-4xl font-headline font-bold text-on-background">Intelligence at every step</h2>
+<p class="text-on-surface-variant">Designed to bring clarity and precision to the complex placement process.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Feature 1 -->
+<div class="md:col-span-8 bg-surface-container-low rounded-[2rem] p-10 flex flex-col md:flex-row gap-8 items-center border-[1px] border-white/60 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary-fixed rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
+<div class="flex-1 space-y-4 relative z-10">
+<div class="bg-surface-container-lowest w-12 h-12 rounded-full flex items-center justify-center shadow-sm mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="verified_user">verified_user</span>
+</div>
+<h3 class="text-2xl font-bold text-on-background">Verified Profiles</h3>
+<p class="text-on-surface-variant text-base leading-relaxed">We cross-reference institutional records, GitHub repositories, and assessment scores to ensure every claim on a resume is authentic before it reaches recruiters.</p>
+</div>
+<div class="flex-1 w-full bg-surface-container-lowest rounded-xl p-6 shadow-sm relative z-10">
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary-fixed rounded-full flex items-center justify-center text-primary font-bold">A</div>
+<div class="flex-1">
+<div class="h-4 bg-surface-container-high rounded w-3/4 mb-2"></div>
+<div class="h-3 bg-surface-container-high rounded w-1/2"></div>
+</div>
+<span class="material-symbols-outlined text-green-500" data-icon="check_circle">check_circle</span>
+</div>
+<div class="flex items-center gap-3 opacity-50">
+<div class="w-10 h-10 bg-surface-container-high rounded-full"></div>
+<div class="flex-1">
+<div class="h-4 bg-surface-container-high rounded w-2/3 mb-2"></div>
+<div class="h-3 bg-surface-container-high rounded w-1/3"></div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="pending">pending</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Feature 2 -->
+<div class="md:col-span-4 bg-primary rounded-[2rem] p-10 text-on-primary flex flex-col justify-between relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent"></div>
+<div class="relative z-10 space-y-4 mb-12">
+<div class="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md mb-6">
+<span class="material-symbols-outlined text-white" data-icon="join_inner">join_inner</span>
+</div>
+<h3 class="text-2xl font-bold">AI Candidate Matching</h3>
+<p class="text-white/80 text-base leading-relaxed">Semantic matching goes beyond keywords to find true skill alignment.</p>
+</div>
+<div class="relative z-10 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 flex justify-between items-end">
+<div>
+<div class="text-xs text-white/70 uppercase tracking-wider mb-1">Match Score</div>
+<div class="text-4xl font-bold">94%</div>
+</div>
+<span class="material-symbols-outlined text-white/50 text-5xl" data-icon="analytics">analytics</span>
+</div>
+</div>
+<!-- Feature 3 -->
+<div class="md:col-span-12 bg-surface-container-low rounded-[2rem] p-10 border-[1px] border-white/60">
+<div class="flex flex-col md:flex-row gap-12 items-center">
+<div class="flex-1 space-y-4">
+<div class="bg-surface-container-lowest w-12 h-12 rounded-full flex items-center justify-center shadow-sm mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="dashboard">dashboard</span>
+</div>
+<h3 class="text-2xl font-bold text-on-background">TPO Dashboard</h3>
+<p class="text-on-surface-variant text-base leading-relaxed max-w-lg">A centralized command center for Training and Placement Officers. Track overall campus performance, upcoming drives, and student readiness metrics at a glance.</p>
+<button class="mt-4 bg-surface-container-highest text-on-surface px-6 py-2 rounded-full font-medium hover:bg-surface-variant transition-colors flex items-center gap-2">
+                                View Dashboard <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<div class="flex-[1.5] w-full bg-surface-container-lowest rounded-xl p-2 shadow-sm border border-outline-variant/20 h-64 overflow-hidden relative">
+<!-- Abstract Dashboard UI -->
+<div class="absolute top-4 left-4 right-4 flex gap-4">
+<div class="h-24 bg-primary/10 rounded-lg flex-1 border border-primary/20"></div>
+<div class="h-24 bg-surface-container-high rounded-lg flex-1"></div>
+<div class="h-24 bg-surface-container-high rounded-lg flex-1"></div>
+</div>
+<div class="absolute top-32 left-4 right-4 h-32 bg-surface-container-high rounded-lg opacity-50"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Live Use Case -->
+<section class="bg-surface-container-lowest rounded-[3rem] p-12 border border-outline-variant/20 shadow-[0_24px_48px_rgba(75,73,204,0.04)] relative overflow-hidden">
+<div class="absolute -top-40 -right-40 w-96 h-96 bg-primary-fixed rounded-full blur-[100px] opacity-30"></div>
+<div class="text-center mb-12 relative z-10">
+<span class="text-primary font-semibold tracking-wider uppercase text-xs mb-2 block">Live Demo</span>
+<h2 class="text-3xl sm:text-4xl font-headline font-bold text-on-background">See it in action</h2>
+</div>
+<div class="flex flex-col gap-6 max-w-4xl mx-auto relative z-10">
+<!-- Prompt Area -->
+<div class="bg-surface-container-low rounded-2xl p-6 flex items-start gap-4 border border-white/50">
+<div class="bg-surface-container-highest w-10 h-10 rounded-full flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface" data-icon="person">person</span>
+</div>
+<div class="space-y-2 w-full">
+<div class="text-sm font-medium text-on-surface">Recruiter Prompt</div>
+<div class="bg-surface-container-lowest rounded-xl p-4 text-on-surface-variant font-mono text-sm border border-outline-variant/20">
+                            "Find top 5 students for a React Frontend Intern role. Must have &gt;8 CGPA, completed at least one full-stack project, and have an active GitHub. Rank by technical assessment score."
+                        </div>
+</div>
+</div>
+<!-- AI Response Area -->
+<div class="bg-primary/5 rounded-2xl p-6 flex items-start gap-4 border border-primary/20">
+<div class="bg-gradient-to-br from-primary to-primary-container w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-white text-sm" data-icon="temp_preferences_custom">temp_preferences_custom</span>
+</div>
+<div class="space-y-4 w-full">
+<div class="text-sm font-bold text-primary">VerifAI Engine Output</div>
+<p class="text-sm text-on-surface-variant">Analyzed 450 profiles. Found 12 matches. Here are the top 3 ranked candidates based on your criteria:</p>
+<div class="space-y-3">
+<!-- Result 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-4 flex justify-between items-center border border-white/60 shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-primary-fixed rounded-full flex items-center justify-center text-xs font-bold text-primary">1</div>
+<div>
+<div class="font-bold text-on-background text-sm">Sarah Jenkins</div>
+<div class="text-xs text-on-surface-variant">CS \u2022 8.9 CGPA \u2022 3 React Projects</div>
+</div>
+</div>
+<div class="bg-green-100 text-green-800 text-xs px-3 py-1 rounded-full font-medium">98% Match</div>
+</div>
+<!-- Result 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-4 flex justify-between items-center border border-white/60 shadow-sm opacity-80">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-surface-container-high rounded-full flex items-center justify-center text-xs font-bold text-on-surface">2</div>
+<div>
+<div class="font-bold text-on-background text-sm">David Chen</div>
+<div class="text-xs text-on-surface-variant">IT \u2022 8.4 CGPA \u2022 2 React Projects</div>
+</div>
+</div>
+<div class="bg-green-50 text-green-700 text-xs px-3 py-1 rounded-full font-medium">92% Match</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-20 px-12 flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto bg-zinc-50 dark:bg-zinc-950 text-indigo-600 dark:text-indigo-400 font-sans text-xs uppercase tracking-widest rounded-t-[3rem] w-full tonal-shift surface_container_low opacity-80 hover:opacity-100">
+<div class="flex items-center gap-2 mb-8 md:mb-0">
+<span class="material-symbols-outlined" data-icon="intelligence">network_intelligence</span>
+<span class="text-lg font-bold text-zinc-900 dark:text-zinc-50 tracking-normal normal-case">VerifAI</span>
+</div>
+<div class="flex flex-wrap justify-center gap-8 mb-8 md:mb-0">
+<a class="text-zinc-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all" href="#">Product</a>
+<a class="text-zinc-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all" href="#">Intelligence</a>
+<a class="text-zinc-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all" href="#">Privacy</a>
+<a class="text-zinc-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all" href="#">Terms</a>
+</div>
+<div class="text-zinc-400 dark:text-zinc-500 normal-case tracking-normal text-sm">
+            © 2024 VerifAI Intelligence. All rights reserved.
+        </div>
+</footer>
+</body></html>

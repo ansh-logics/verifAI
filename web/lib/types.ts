@@ -1,0 +1,249 @@
+export type BranchOption =
+  | "CSE"
+  | "IT"
+  | "ECE"
+  | "EEE"
+  | "ME"
+  | "CE"
+  | "AIML"
+  | "DS"
+  | "Other";
+
+export interface AnalyzeResponse {
+  student: {
+    name: string;
+    email: string;
+    roll_no?: string | null;
+    phone: string;
+    branch: string;
+    cgpa: number | null;
+    gender: "women" | "men" | "other";
+    cgpa_verified: boolean;
+  };
+  skills: string[];
+  coding: {
+    persona: string;
+    score: number;
+    github: Record<string, unknown>;
+    leetcode: Record<string, unknown>;
+  };
+  academics: {
+    cgpa: number | null;
+    verified: boolean;
+    score: number;
+  };
+  overall_score: number;
+  resume_url: string | null;
+}
+
+export interface StudentProfilePayload {
+  student: {
+    name: string;
+    email: string;
+    roll_no?: string | null;
+    phone: string;
+    branch: string;
+    cgpa: number | null;
+    gender: "women" | "men" | "other";
+    cgpa_verified: boolean;
+  };
+  skills: string[];
+  coding: {
+    persona: string;
+    score: number;
+    github: Record<string, unknown>;
+    leetcode: Record<string, unknown>;
+  };
+  academics: {
+    cgpa: number | null;
+    verified: boolean;
+    score: number;
+  };
+  overall_score: number;
+  resume_url: string | null;
+  marksheet_url: string | null;
+  resume_data: Record<string, unknown>;
+  academic_data: Record<string, unknown>;
+  github_data: Record<string, unknown>;
+  leetcode_data: Record<string, unknown>;
+}
+
+export interface SaveProfileResponse {
+  success: boolean;
+  student_id: number;
+  profile_id: number;
+  message: string;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  student_id: number;
+  email: string;
+  roll_no: string | null;
+}
+
+export interface RegisterRequestBody {
+  email: string;
+  password: string;
+  phone: string;
+  roll_no: string;
+  branch: string;
+  cgpa: number;
+  gender: "women" | "men" | "other";
+}
+
+export interface RegisterResponseBody {
+  success: boolean;
+  student_id: number;
+  message: string;
+}
+
+export interface LoginRequestBody {
+  identifier: string;
+  password: string;
+}
+
+export interface StudentProfileDetail {
+  id: number;
+  student_id: number;
+  student: {
+    name: string;
+    email: string;
+    roll_no: string | null;
+    phone: string;
+    branch: string;
+    cgpa: number | null;
+    gender: "women" | "men" | "other";
+    cgpa_verified: boolean;
+  };
+  skills: string[];
+  coding: {
+    persona: string;
+    score: number;
+    github: Record<string, unknown>;
+    leetcode: Record<string, unknown>;
+  };
+  academics: {
+    cgpa: number | null;
+    verified: boolean;
+    score: number;
+  };
+  overall_score: number;
+  resume_url?: string | null;
+  resume_data: Record<string, unknown>;
+  academic_data: Record<string, unknown>;
+  github_data: Record<string, unknown>;
+  leetcode_data: Record<string, unknown>;
+  last_analyzed_at: string;
+  created_at: string;
+}
+
+export interface FormDataState {
+  resumeFile: File | null;
+  marksheetFile: File | null;
+  githubUsername: string;
+  leetcodeUsername: string;
+  codeforcesUsername: string;
+  name: string;
+  email: string;
+  rollNo: string;
+  phone: string;
+  branch: BranchOption;
+  cgpa: string;
+}
+
+export interface DashboardDraftData {
+  githubUsername: string;
+  leetcodeUsername: string;
+  codeforcesUsername: string;
+  name: string;
+  email: string;
+  rollNo: string;
+  phone: string;
+  branch: BranchOption;
+  cgpa: string;
+}
+
+export type PlacementFilter = "unplaced_only" | "placed_or_unplaced";
+export type GenderFilter = "women_only" | "men_only" | "all_genders" | "custom_text";
+
+export interface JDMatchRequestBody {
+  jd_text: string;
+  student_ids?: number[];
+  top_k?: number;
+}
+
+export interface JDMatchSubmitInput {
+  jdText?: string;
+  jdFile?: File | null;
+  studentIds?: number[];
+  topK?: number;
+}
+
+export interface JDMatchScoreBreakdown {
+  required_skills: number;
+  preferred_tools_traits: number;
+  cgpa: number;
+  branch_affinity: number;
+  total: number;
+}
+
+export interface JDMatchCandidate {
+  student_id: number;
+  email: string;
+  name: string;
+  roll_no: string | null;
+  gender: "women" | "men" | "other";
+  branch: string;
+  cgpa: number | null;
+  skills: string[];
+  resume_url: string | null;
+  coding_persona: string | null;
+  is_placed: boolean;
+  has_active_backlog: boolean;
+  score_breakdown: JDMatchScoreBreakdown;
+}
+
+export interface JDMatchFilters {
+  total_considered: number;
+  passed_filters: number;
+  rejected_min_cgpa: number;
+  rejected_branch: number;
+  rejected_gender: number;
+  rejected_backlog: number;
+  rejected_placement: number;
+}
+
+export interface JDParsedConstraints {
+  job_title: string | null;
+  role_type: "full_time" | "internship" | "contract" | "part_time" | "unknown";
+  required_skills: string[];
+  preferred_skills: string[];
+  tools_and_technologies: string[];
+  responsibilities: string[];
+  min_experience_years: number | null;
+  accepts_freshers: boolean;
+  key_traits: string[];
+  education_requirements: string[];
+  location: string | null;
+  domain: string | null;
+  duration: string | null;
+  work_type: string | null;
+  target_student_count: number | null;
+  exclude_active_backlogs: boolean;
+  placement_filter: PlacementFilter;
+  placement_exception_roll_nos: string[];
+  min_cgpa: number | null;
+  allowed_branches: string[];
+  gender_filter: GenderFilter;
+  gender_filter_raw: string | null;
+  branch_constraint_raw: string | null;
+  branch_inference_reason: string | null;
+}
+
+export interface JDMatchResponseBody {
+  jd: JDParsedConstraints;
+  filters: JDMatchFilters;
+  candidates: JDMatchCandidate[];
+}
