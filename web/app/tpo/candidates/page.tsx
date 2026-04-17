@@ -4,7 +4,7 @@ import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Target, Trophy, UploadCloud, Users, X, Download } from "lucide-react";
+import { CheckCircle2, FileText, Loader2, Target, Trophy, UploadCloud, Users, X, Download } from "lucide-react";
 
 import { matchCandidatesWithJd, matchCandidatesWithJdMultipart } from "@/lib/api";
 import type { JDMatchCandidate, JDMatchFilters, JDParsedConstraints } from "@/lib/types";
@@ -468,60 +468,149 @@ export default function TpoDashboardPage() {
             </section>
 
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl z-50 px-4">
-              <motion.div
-                ref={composerRef}
-                layout
-                transition={{ layout: { type: "spring", stiffness: 300, damping: 38, mass: 0.9 } }}
-                className={cn("bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/60 p-2 flex items-end gap-3 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)]", isInputExpanded ? "rounded-3xl" : "rounded-full")}
-              >
-                <Button type="button" variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} disabled={loading} className="shrink-0 self-end rounded-full size-12 text-slate-400 hover:text-slate-600 hover:bg-slate-100"><UploadCloud className="size-5" /></Button>
-                <motion.div
-                  className="flex-1 min-w-0 relative overflow-hidden self-end"
-                  animate={{ height: isInputExpanded ? composerInputHeight : COMPACT_HEIGHT }}
-                  transition={{ type: "spring", stiffness: 260, damping: 34, mass: 0.95 }}
-                >
-                  <AnimatePresence mode="wait" initial={false}>
-                    {!isInputExpanded ? (
-                      <motion.button
-                        key="collapsed-preview"
-                        type="button"
-                        onClick={handleExpandInput}
+              {(() => {
+                const isRich = isInputExpanded || !!fileUpload;
+                const fileExt = fileUpload ? (fileUpload.name.match(/\.([^.]+)$/)?.[1] || "FILE").toUpperCase() : "";
+                const fileBase = fileUpload ? fileUpload.name.replace(/\.[^.]+$/, "") : "";
+                return (
+                  <motion.div
+                    ref={composerRef}
+                    layout
+                    transition={{ layout: { type: "spring", stiffness: 300, damping: 38, mass: 0.9 } }}
+                    className={cn(
+                      "bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)]",
+                      isRich ? "rounded-[28px] p-3 flex flex-col gap-2" : "rounded-full p-2 flex items-center gap-2"
+                    )}
+                  >
+                    {fileUpload && (
+                      <motion.div
+                        layout
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 4 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="h-full w-full text-left text-base leading-6 text-slate-700 placeholder:text-slate-400 truncate overflow-hidden pr-4 inline-flex items-center [mask-image:linear-gradient(to_right,black_85%,transparent)]"
+                        exit={{ opacity: 0, y: -4 }}
+                        className="flex flex-wrap gap-2 px-1"
                       >
-                        {collapsedPreview || "Describe JD and constraints or upload JD file..."}
-                      </motion.button>
-                    ) : (
-                      <motion.textarea
-                        key="expanded-textarea"
-                        ref={jdTextareaRef}
-                        value={jdInput}
-                        onChange={(e) => setJdInput(e.target.value)}
-                        onFocus={handleExpandInput}
-                        onClick={handleExpandInput}
-                        placeholder="Describe JD and constraints or upload JD file..."
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.22, ease: "easeInOut" }}
-                        className="h-full w-full resize-none bg-transparent border-none focus:outline-none text-slate-700 placeholder:text-slate-400 text-base leading-6 py-3 whitespace-pre-wrap overflow-y-auto"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            if (!loading) void runMatch();
-                          }
-                        }}
-                      />
+                        <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl pl-2 pr-2 py-2 max-w-[260px]">
+                          <div className="size-9 rounded-lg bg-red-500 text-white flex items-center justify-center shrink-0">
+                            <FileText className="size-4" />
+                          </div>
+                          <div className="min-w-0 pr-1">
+                            <div className="text-sm font-medium text-slate-900 truncate leading-tight" title={fileUpload.name}>
+                              {fileBase}
+                            </div>
+                            <div className="text-[11px] text-slate-500 uppercase leading-tight tracking-wide">
+                              {fileExt}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFileUpload(null)}
+                            className="ml-1 size-5 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center shrink-0"
+                            aria-label="Remove JD file"
+                          >
+                            <X className="size-3 text-slate-600" />
+                          </button>
+                        </div>
+                      </motion.div>
                     )}
-                  </AnimatePresence>
-                </motion.div>
-                {fileUpload && <Badge variant="secondary" className="h-8 rounded-full px-3 bg-blue-50 text-blue-700 border-blue-100 flex items-center gap-2"><span className="truncate max-w-[180px]" title={fileUpload.name}>{fileUpload.name}</span><button onClick={() => setFileUpload(null)} className="hover:text-blue-900" aria-label="Remove JD file"><X className="size-3.5" /></button></Badge>}
-                <Button onClick={() => void runMatch()} disabled={loading || (!fileUpload && jdInput.trim().length < 20)} className="self-end rounded-full h-12 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm">{loading ? <Loader2 className="size-5 animate-spin" /> : "Analyze"}</Button>
-                <input ref={fileInputRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(e) => setFileUpload(e.target.files?.[0] ?? null)} />
-              </motion.div>
+
+                    <motion.div
+                      layout
+                      className={cn("min-w-0 relative overflow-hidden", isRich ? "w-full px-1" : "flex-1")}
+                      animate={{ height: isInputExpanded ? composerInputHeight : COMPACT_HEIGHT }}
+                      transition={{ type: "spring", stiffness: 260, damping: 34, mass: 0.95 }}
+                    >
+                      <AnimatePresence mode="wait" initial={false}>
+                        {!isInputExpanded ? (
+                          <motion.button
+                            key="collapsed-preview"
+                            type="button"
+                            onClick={handleExpandInput}
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 4 }}
+                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                            className="h-full w-full text-left text-base leading-6 text-slate-700 placeholder:text-slate-400 truncate overflow-hidden pr-4 inline-flex items-center [mask-image:linear-gradient(to_right,black_85%,transparent)]"
+                          >
+                            {collapsedPreview || "Describe JD and constraints or upload JD file..."}
+                          </motion.button>
+                        ) : (
+                          <motion.textarea
+                            key="expanded-textarea"
+                            ref={jdTextareaRef}
+                            value={jdInput}
+                            onChange={(e) => setJdInput(e.target.value)}
+                            onFocus={handleExpandInput}
+                            onClick={handleExpandInput}
+                            placeholder="Describe JD and constraints or upload JD file..."
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.22, ease: "easeInOut" }}
+                            className="h-full w-full resize-none bg-transparent border-none focus:outline-none text-slate-700 placeholder:text-slate-400 text-base leading-6 py-1 whitespace-pre-wrap overflow-y-auto"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                if (!loading) void runMatch();
+                              }
+                            }}
+                          />
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+
+                    {isRich ? (
+                      <motion.div layout className="flex items-center justify-between pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={loading}
+                          className="shrink-0 rounded-full size-10 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        >
+                          <UploadCloud className="size-5" />
+                        </Button>
+                        <Button
+                          onClick={() => void runMatch()}
+                          disabled={loading || (!fileUpload && jdInput.trim().length < 20)}
+                          className="rounded-full h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
+                        >
+                          {loading ? <Loader2 className="size-5 animate-spin" /> : "Analyze"}
+                        </Button>
+                      </motion.div>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={loading}
+                          className="shrink-0 rounded-full size-10 text-slate-400 hover:text-slate-600 hover:bg-slate-100 order-first"
+                        >
+                          <UploadCloud className="size-5" />
+                        </Button>
+                        <Button
+                          onClick={() => void runMatch()}
+                          disabled={loading || (!fileUpload && jdInput.trim().length < 20)}
+                          className="rounded-full h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
+                        >
+                          {loading ? <Loader2 className="size-5 animate-spin" /> : "Analyze"}
+                        </Button>
+                      </>
+                    )}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={(e) => setFileUpload(e.target.files?.[0] ?? null)}
+                    />
+                  </motion.div>
+                );
+              })()}
             </div>
             </div>
           </div>
