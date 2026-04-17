@@ -11,9 +11,11 @@ class Settings(BaseSettings):
     resume_analyzer_base_url: str = "http://resume-analyzer-dev:8080"
     coding_analyzer_base_url: str = "http://coding-analyzer-dev:8080"
     marksheet_analyzer_base_url: str = "http://marksheet-analyzer-dev:8080"
+    jd_analyzer_base_url: str = "http://jd-analyzer-dev:8080"
     resume_http_timeout_s: float = 120.0
     coding_http_timeout_s: float = 180.0
     marksheet_http_timeout_s: float = 120.0
+    jd_http_timeout_s: float = 120.0
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/verifai"
     db_pool_size: int = 10
     db_max_overflow: int = 20
@@ -43,6 +45,10 @@ class Settings(BaseSettings):
     @property
     def marksheet_base(self) -> str:
         return self.marksheet_analyzer_base_url.rstrip("/")
+
+    @property
+    def jd_base(self) -> str:
+        return self.jd_analyzer_base_url.rstrip("/")
 
     @property
     def cors_origins_list(self) -> list[str]:

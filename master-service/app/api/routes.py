@@ -76,6 +76,11 @@ async def index(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(request, "index.html", {"request": request})
 
 
+@router.get("/match-jd", response_class=HTMLResponse)
+async def match_jd_page(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(request, "match_jd.html", {"request": request})
+
+
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}

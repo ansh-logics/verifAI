@@ -43,10 +43,14 @@ def _apply_startup_schema_updates() -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS roll_no VARCHAR(64)"))
         conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT ''"))
+        conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS gender VARCHAR(16)"))
         conn.execute(text("UPDATE students SET password_hash = '' WHERE password_hash IS NULL"))
+        conn.execute(text("UPDATE students SET gender = 'other' WHERE gender IS NULL OR trim(gender) = ''"))
         conn.execute(text("ALTER TABLE students ALTER COLUMN password_hash SET NOT NULL"))
+        conn.execute(text("ALTER TABLE students ALTER COLUMN gender SET NOT NULL"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_students_roll_no_unique ON students (roll_no)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_roll_no_lookup ON students (roll_no)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_gender ON students (gender)"))
 
 
 @app.on_event("startup")

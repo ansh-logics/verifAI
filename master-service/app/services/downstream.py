@@ -104,3 +104,25 @@ async def call_marksheet_analyzer(
         return None, f"Marksheet analyzer returned {exc.response.status_code}: {detail}"
     except Exception as exc:
         return None, _error_from_httpx(exc)
+
+
+async def call_jd_analyzer(
+    *,
+    settings: Settings,
+    client: httpx.AsyncClient,
+    jd_text: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    url = f"{settings.jd_base}/analyze-jd"
+    try:
+        response = await client.post(
+            url,
+            json={"jd_text": jd_text},
+            timeout=settings.jd_http_timeout_s,
+        )
+        response.raise_for_status()
+        return response.json(), None
+    except httpx.HTTPStatusError as exc:
+        detail = _http_error_detail(exc.response)
+        return None, f"JD analyzer returned {exc.response.status_code}: {detail}"
+    except Exception as exc:
+        return None, _error_from_httpx(exc)

@@ -1,0 +1,289 @@
+VerifAI Technical Report
+Topic: Database storage, JD extraction, normalization, and matching flow
+Prepared for: Team review and gap analysis
+Date: 2026-04-17
+
+====================================================================
+1) CURRENT BACKEND DATA STORAGE (MASTER-SERVICE)
+====================================================================
+
+Database tables and key columns:
+
+1. students
+- id (PK)
+- name
+- email (unique, indexed)
+- roll_no (unique, indexed, nullable)
+- password_hash
+- phone
+- branch (indexed)
+- cgpa (nullable float)
+- gender (indexed, required)
+- cgpa_verified (bool)
+- created_at
+
+2. student_profiles (1:1 with students via student_id unique)
+- skills (ARRAY text)
+- skills_json (JSON mirror)
+- coding_persona
+- coding_score
+- academic_score
+- overall_score
+- github_data (JSONB)
+- leetcode_data (JSONB)
+- resume_data (JSONB)
+- academic_data (JSONB)
+- last_analyzed_at
+
+3. raw_uploads (1:N with students)
+- student_id
+- resume_url
+- marksheet_url
+- uploaded_at
+
+How storage is used in matching:
+- Core identity/filter fields come from students:
+  branch, cgpa, gender, roll_no
+- Skill + metadata signals come from student_profiles:
+  skills, coding_persona, resume_data.metadata, academic_data
+- Latest resume URL is resolved from raw_uploads for result payload.
+
+====================================================================
+2) WHAT DATA WE GET FROM JD (VIA JD-ANALYZER + LLM)
+====================================================================
+
+LLM provider flow:
+- Service: jd-analyzer
+- Model call: Groq chat completion
+- Model target: llama-3.3-70b-versatile
+- temperature = 0
+- response_format = {"type":"json_object"}
+- Defensive parsing + strict JSON normalization happens after LLM output.
+
+JD input:
+- POST /analyze-jd
+- payload: { "jd_text": "<combined JD + TPO constraints>" }
+- minimum 20 chars after trim.
+
+JD normalized output fields consumed by matching:
+- required_skills[]
+- preferred_skills[]
+- tools_and_technologies[]
+- key_traits[]
+- min_cgpa
+- allowed_branches[]
+- gender_filter
+- exclude_active_backlogs
+- placement_filter
+- placement_exception_roll_nos[]
+- target_student_count
+
+Additional parsed context fields available:
+- job_title, role_type, domain, location, duration, work_type
+- responsibilities[]
+- education_requirements[]
+- min_experience_years, accepts_freshers
+- gender_filter_raw
+- branch_constraint_raw
+- branch_inference_reason
+
+====================================================================
+3) NORMALIZATION DETAILS (CRITICAL FOR MATCHING QUALITY)
+====================================================================
+
+A) JD normalization in jd-analyzer:
+
+Skills/traits/tools normalization:
+- trim + lowercase dedupe
+- synonym mapping examples:
+  reactjs -> react
+  react.js -> react
+  js -> javascript
+  nodejs / node js -> node.js
+  ui & ux design -> ui/ux design
+
+Branch normalization:
+- maps long forms to canonical short forms:
+  "computer science and engineering" -> cse
+  "information technology" -> it
+  "data science" -> ds
+  etc.
+
+Branch family inference:
+- phrases like "cse related" auto-expand to:
+  [cse, it, aiml, ds]
+- rationale stored in branch_inference_reason
+
+Gender normalization:
+- women/men/all-genders/custom-text categories
+- custom phrases preserved in gender_filter_raw when needed
+
+Roll normalization:
+- exception roll numbers uppercased + spaces removed + deduped
+
+Numeric normalization:
+- target_student_count <= 0 -> null
+- min_cgpa outside [0,10] -> null
+
+Safety defaults:
+- invalid role_type -> unknown
+- invalid placement_filter -> placed_or_unplaced
+- accepts_freshers forced true when min_experience_years <= 0
+
+B) Matching-side normalization in master-service:
+
+- Student skills and JD skill sets are compared in lowercase sets.
+- Allowed branches compared lowercased.
+- Student roll number uppercased for placement exception checks.
+- Boolean status flags extracted from JSON safely:
+  resume_data.metadata.is_placed
+  resume_data.metadata.has_active_backlog
+  academic_data.has_active_backlog
+
+====================================================================
+4) HOW MATCHING IS CURRENTLY DONE
+====================================================================
+
+Endpoint:
+- POST /student/match-jd
+
+Request:
+- jd_text (required)
+- student_ids[] (optional scope restriction)
+- top_k (optional output cap)
+
+Flow:
+1) Master-service calls jd-analyzer (/analyze-jd)
+2) Receives normalized JD constraints
+3) Loads candidate pool from DB (all or selected IDs)
+4) Applies hard filters
+5) Computes weighted fit score
+6) Sorts by score desc, then student_id asc for tie stability
+7) Applies cap:
+   - target_student_count from JD
+   - top_k from request
+   (smaller cap wins if both are set)
+
+Hard filters currently applied:
+- min_cgpa
+- allowed_branches
+- gender_filter (women_only / men_only)
+- exclude_active_backlogs
+- placement_filter == unplaced_only
+  with placement_exception_roll_nos override
+
+Weighted scoring (100 total):
+- required skills overlap: 50
+- preferred+tools+traits overlap: 20
+- cgpa component: 20
+- branch affinity bonus: 10
+
+Returned output:
+- jd parsed constraints snapshot
+- filter rejection counters (min cgpa, branch, gender, backlog, placement)
+- ranked candidate list + score breakdown + resume_url
+
+====================================================================
+5) WHAT IS WORKING WELL
+====================================================================
+
+- Service boundaries are clear:
+  jd-analyzer parses constraints, master-service handles ranking/filtering.
+- JD output normalization is strong and consistent for core constraints.
+- Matching output is explainable (filter counters + score components).
+- Placement exception logic is present and functioning.
+- Endpoint supports both broad and targeted matching (all vs student_ids).
+- Standalone UI routes exist for service-level access:
+  / (profile analysis) and /match-jd (matching console).
+
+====================================================================
+6) GAPS / RISKS TO DISCUSS WITH TEAM
+====================================================================
+
+Gap 1: Hardcoded scoring weights
+- Current weights are constants in code.
+- No runtime config or per-company tuning.
+Recommendation:
+- Move weights to config/env or DB policy profile.
+
+Gap 2: Custom gender constraints are not enforced
+- JD may return gender_filter=custom_text with gender_filter_raw,
+  but matcher only enforces women_only / men_only explicitly.
+Recommendation:
+- Add explicit rule path for custom_text or mark as manual-review-required.
+
+Gap 3: Backlog/placement source depends on profile JSON conventions
+- is_placed and backlog flags are inferred from JSON keys, not dedicated columns.
+- Risk of schema drift across ingestion sources.
+Recommendation:
+- Promote placement/backlog canonical fields to students table (or normalized table).
+
+Gap 4: No semantic skill similarity
+- Skill matching is exact token-overlap after normalization.
+- No hierarchy/embedding similarity (e.g., "frontend" vs "react").
+Recommendation:
+- Add skill ontology or embedding-assisted similarity layer.
+
+Gap 5: Branch mapping incompleteness risk
+- Canonical mappings cover common branches, but long-tail aliases may be missed.
+Recommendation:
+- Expand branch synonym dictionary and add analytics on unmatched tokens.
+
+Gap 6: Experience/education/location currently parsed but not used in filtering
+- These fields are in JD output but not part of current filter/score.
+Recommendation:
+- Add optional scoring/filter contributions for these fields.
+
+Gap 7: No persistent match run history
+- Match results are returned but not stored for audit/replay.
+Recommendation:
+- Add match_runs + match_candidates tables for traceability.
+
+Gap 8: Performance scaling for large student counts
+- Current implementation loads candidate pool and filters in Python layer.
+Recommendation:
+- Push coarse filters to SQL, add pagination, and profile query plans.
+
+Gap 9: Limited failure fallback when JD service degrades
+- If jd-analyzer fails, endpoint returns 502.
+Recommendation:
+- Add retry policy/circuit breaker and optional cached parse for same JD hash.
+
+Gap 10: Data quality governance
+- Missing/partial student profile fields can lower matching quality silently.
+Recommendation:
+- Add readiness score and reject/flag incomplete profiles before matching.
+
+====================================================================
+7) IMMEDIATE NEXT ACTIONS (PRACTICAL)
+====================================================================
+
+Priority P0:
+1) Decide canonical storage for placement/backlog (schema-level)
+2) Decide policy for gender_filter=custom_text
+3) Externalize scoring weights to config
+
+Priority P1:
+4) Add match run persistence for auditability
+5) Add SQL-side prefiltering for scale
+6) Add unused JD fields (experience/education/location) into score/filter policy
+
+Priority P2:
+7) Skill ontology/semantic similarity improvements
+8) Branch synonym observability and automatic suggestions
+
+====================================================================
+8) QUICK SUMMARY FOR TEAM
+====================================================================
+
+We now have:
+- structured student/profile/upload data in PostgreSQL,
+- deterministic LLM-based JD parsing with normalization,
+- explainable rule+score matching endpoint and UI.
+
+Main open gaps are:
+- policy configurability,
+- canonical status data modeling (placement/backlog),
+- richer similarity logic,
+- and production-grade audit/performance hardening.
+

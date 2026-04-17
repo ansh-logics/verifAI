@@ -108,6 +108,7 @@ def normalize_master_output(
             "phone": str(resume.get("phone") or "").strip(),
             "branch": str(resume.get("branch") or "").strip(),
             "cgpa": final_cgpa,
+            "gender": "other",
             "cgpa_verified": marksheet_cgpa is not None,
         },
         "skills": normalize_skills(resume.get("skills")),

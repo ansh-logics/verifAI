@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,8 @@ from app.database.models import RawUpload, StudentProfile
 from app.dependencies.auth import get_current_student_id, get_optional_student_id
 from app.schemas.student import (
     AuthTokenResponse,
+    JDMatchRequest,
+    JDMatchResponse,
     LoginRequest,
     RegisterRequest,
     RegisterResponse,
@@ -21,7 +24,9 @@ from app.schemas.student import (
     StudentProfileStoreResponse,
 )
 from app.services.auth_service import AuthService
+from app.services.downstream import DEFAULT_HEADERS, call_jd_analyzer
 from app.services.master_service import analyze_student_profile, analyze_student_profile_incremental
+from app.services.matching_service import run_jd_matching
 from app.services.profile_service import ProfileService
 
 logger = logging.getLogger(__name__)
@@ -237,3 +242,24 @@ def login_student(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthT
 def get_student_profile(id: int, db: Session = Depends(get_db)) -> StudentProfileResponse:
     service = ProfileService(db)
     return service.get_profile(id)
+
+
+@router.post("/match-jd", response_model=JDMatchResponse)
+async def match_students_with_jd(payload: JDMatchRequest, db: Session = Depends(get_db)) -> JDMatchResponse:
+    settings = get_settings()
+    async with httpx.AsyncClient(headers=DEFAULT_HEADERS) as client:
+        jd_data, jd_error = await call_jd_analyzer(
+            settings=settings,
+            client=client,
+            jd_text=payload.jd_text,
+        )
+    if jd_error or jd_data is None:
+        raise HTTPException(status_code=502, detail=f"JD analyzer failed: {jd_error or 'unknown error'}")
+
+    constraints, filters, candidates = run_jd_matching(
+        db=db,
+        jd_data=jd_data,
+        student_ids=payload.student_ids,
+        top_k=payload.top_k,
+    )
+    return JDMatchResponse(jd=constraints, filters=filters, candidates=candidates)

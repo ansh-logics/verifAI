@@ -33,8 +33,43 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 | GET | `/` | Form UI |
 | GET | `/health` | Liveness |
 | POST | `/analyze-profile` | `multipart/form-data`: `file` (PDF/DOCX), optional `marksheet_file` (PDF), **`branch`** (required), optional `github_username`, `leetcode_username`, `codeforces_username` |
+| POST | `/student/match-jd` | `application/json`: `jd_text` (required), optional `student_ids`, optional `top_k`; parses JD via `jd-analyzer` and returns filtered + ranked students |
 
 Returns JSON with **`report_version`: 2**, **`generated_at`**, normalized **`student`**, **`academics`** (from marksheet when provided), and **`profile`**, raw downstream payloads under **`sources`**, and status fields **`resume_ok`**, **`resume_error`**, **`coding_ok`**, **`coding_skipped`**, **`coding_error`**, **`marksheet_ok`**, **`marksheet_skipped`**, **`marksheet_error`**. HTTP **502** only if both resume and coding fail; **200** for partial success. **400** if `branch` is missing or whitespace-only.
+
+## Demo seed (manual, reset + reseed)
+
+The demo seed script clears student/profile/upload tables and reseeds mixed records for TPO matching scenarios (gender mix, branch diversity, CGPA spread, backlog and placement flags, and demo resume URLs).
+
+```bash
+cd master-service
+python scripts/seed_demo_students.py
+```
+
+Seeded records include required registration fields (`phone`, `roll_no`, `branch`, `cgpa`, `gender`) and canonical genders: `women`, `men`, `other`.
+
+## JD matching endpoint
+
+Use this endpoint to run JD parsing + candidate matching in one call.
+
+```bash
+curl -X POST http://localhost:18082/student/match-jd \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jd_text": "Hiring frontend interns. Require React and JavaScript, CGPA >= 7.5, no active backlogs, unplaced students only, CSE related branches preferred.",
+    "top_k": 10
+  }'
+```
+
+Request options:
+- `jd_text` (required): raw job description + TPO constraints.
+- `student_ids` (optional): restrict matching scope to specific student IDs.
+- `top_k` (optional): cap final ranked output.
+
+Response includes:
+- `jd`: normalized JD constraints returned from `jd-analyzer`.
+- `filters`: pass/reject counts by hard-filter reason.
+- `candidates`: ranked candidates with score breakdown (`required_skills`, `preferred_tools_traits`, `cgpa`, `branch_affinity`, `total`).
 
 ### Response shape (summary)
 
@@ -102,9 +137,11 @@ Returns JSON with **`report_version`: 2**, **`generated_at`**, normalized **`stu
 | `RESUME_ANALYZER_BASE_URL` | `http://resume-analyzer-dev:8080` |
 | `CODING_ANALYZER_BASE_URL` | `http://coding-analyzer-dev:8080` |
 | `MARKSHEET_ANALYZER_BASE_URL` | `http://marksheet-analyzer-dev:8080` |
+| `JD_ANALYZER_BASE_URL` | `http://jd-analyzer-dev:8080` |
 | `RESUME_HTTP_TIMEOUT_S` | `120` |
 | `CODING_HTTP_TIMEOUT_S` | `180` |
 | `MARKSHEET_HTTP_TIMEOUT_S` | `120` |
+| `JD_HTTP_TIMEOUT_S` | `120` |
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@postgres-dev:5432/verifai` |
 | `DB_POOL_SIZE` | `10` |
 | `DB_MAX_OVERFLOW` | `20` |

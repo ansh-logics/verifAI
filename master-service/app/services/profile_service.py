@@ -51,12 +51,13 @@ class ProfileService:
         student = Student(
             name=payload.email.split("@")[0],
             email=payload.email,
-            roll_no=None,
+            roll_no=payload.roll_no,
             password_hash=self.auth_service.hash_password(payload.password),
-            phone="PENDING",
-            branch="PENDING",
-            cgpa=None,
-            cgpa_verified=False,
+            phone=payload.phone,
+            branch=payload.branch,
+            cgpa=payload.cgpa,
+            gender=payload.gender,
+            cgpa_verified=True,
         )
         self.db.add(student)
         self.db.commit()
@@ -104,6 +105,7 @@ class ProfileService:
                 phone=payload.student.phone,
                 branch=payload.student.branch,
                 cgpa=payload.student.cgpa,
+                gender=payload.student.gender,
                 cgpa_verified=payload.student.cgpa_verified,
             )
             self.db.add(student)
@@ -118,6 +120,7 @@ class ProfileService:
             student.phone = payload.student.phone
             student.branch = payload.student.branch
             student.cgpa = payload.student.cgpa
+            student.gender = payload.student.gender
             student.cgpa_verified = payload.student.cgpa_verified
             if payload.student.roll_no:
                 student.roll_no = payload.student.roll_no
@@ -201,6 +204,7 @@ class ProfileService:
                 phone=student.phone,
                 branch=student.branch,
                 cgpa=student.cgpa,
+                gender=student.gender,
                 cgpa_verified=student.cgpa_verified,
             ),
             skills=profile.skills or [],

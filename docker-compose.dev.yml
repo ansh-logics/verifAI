@@ -50,6 +50,7 @@ services:
       RESUME_ANALYZER_BASE_URL: http://resume-analyzer-dev:8080
       CODING_ANALYZER_BASE_URL: http://coding-analyzer-dev:8080
       MARKSHEET_ANALYZER_BASE_URL: http://marksheet-analyzer-dev:8080
+      JD_ANALYZER_BASE_URL: http://jd-analyzer-dev:8080
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres-dev:5432/verifai
     healthcheck:
       test:
@@ -71,6 +72,8 @@ services:
       coding-analyzer-dev:
         condition: service_started
       marksheet-analyzer-dev:
+        condition: service_started
+      jd-analyzer-dev:
         condition: service_started
     volumes:
       - ./master-service:/app

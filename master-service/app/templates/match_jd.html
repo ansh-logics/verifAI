@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VeriAI - JD Matching</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.45;
+      color: #1a1a1a;
+      background: #f4f4f5;
+    }
+    body { margin: 0; padding: 1.5rem; max-width: 72rem; margin-inline: auto; }
+    h1 { font-size: 1.3rem; margin: 0 0 0.5rem; }
+    p { margin: 0; color: #52525b; }
+    .topbar {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .chip {
+      display: inline-block;
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid #d4d4d8;
+      background: #fff;
+      color: #3f3f46;
+      font-size: 0.8rem;
+      text-decoration: none;
+    }
+    fieldset {
+      border: 1px solid #d4d4d8;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 0 0 1rem;
+      background: #fff;
+    }
+    legend { padding: 0 0.35rem; font-weight: 600; font-size: 0.9rem; }
+    label { display: block; font-size: 0.85rem; margin-bottom: 0.35rem; color: #3f3f46; }
+    textarea, input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid #d4d4d8;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+      background: #fff;
+    }
+    textarea { min-height: 10rem; resize: vertical; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.85rem;
+    }
+    .row { margin-bottom: 0.8rem; }
+    button {
+      background: #18181b;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.55rem 1.05rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    #loading { display: none; margin: 0.75rem 0; color: #3f3f46; font-size: 0.9rem; }
+    #loading.active { display: block; }
+    .panel {
+      border: 1px solid #e4e4e7;
+      border-radius: 8px;
+      background: #fff;
+      padding: 0.9rem;
+      margin-bottom: 0.9rem;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.6rem;
+      margin-top: 0.6rem;
+    }
+    .stat {
+      border: 1px solid #e4e4e7;
+      border-radius: 6px;
+      background: #fafafa;
+      padding: 0.55rem 0.65rem;
+    }
+    .stat .k { font-size: 0.75rem; color: #71717a; }
+    .stat .v { font-size: 1rem; font-weight: 600; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid #e4e4e7;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 0.88rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.6rem;
+      border-bottom: 1px solid #eee;
+      vertical-align: top;
+    }
+    th {
+      background: #fafafa;
+      font-size: 0.8rem;
+      color: #52525b;
+      font-weight: 600;
+    }
+    tr:last-child td { border-bottom: none; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .error {
+      border: 1px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      border-radius: 8px;
+      padding: 0.7rem 0.8rem;
+      margin-top: 0.8rem;
+    }
+    .muted { color: #71717a; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>JD Matching Console</h1>
+    <a href="/" class="chip">Open Profile Analyzer</a>
+  </div>
+  <p>Run JD parsing and shortlist candidates directly from master-service.</p>
+
+  <form id="matchForm" style="margin-top:1rem;">
+    <fieldset>
+      <legend>Job Description Input</legend>
+      <div class="row">
+        <label for="jd_text">JD text (include requirements and constraints)</label>
+        <textarea id="jd_text" name="jd_text" required placeholder="Paste full job description and TPO constraints..."></textarea>
+      </div>
+      <div class="grid">
+        <div class="row">
+          <label for="student_ids">Optional student IDs (comma-separated)</label>
+          <input id="student_ids" name="student_ids" type="text" placeholder="e.g. 1, 2, 4" />
+        </div>
+        <div class="row">
+          <label for="top_k">Top K (optional)</label>
+          <input id="top_k" name="top_k" type="number" min="1" max="500" placeholder="e.g. 10" />
+        </div>
+      </div>
+      <button id="submitBtn" type="submit">Run JD Matching</button>
+      <div id="loading" aria-live="polite">Parsing JD and ranking candidates...</div>
+    </fieldset>
+  </form>
+
+  <div id="errorBox" class="error hidden"></div>
+
+  <section id="resultSection" class="hidden">
+    <div class="panel">
+      <strong>Applied Constraints</strong>
+      <pre id="constraintsPre" class="mono muted" style="white-space:pre-wrap;margin:0.55rem 0 0;"></pre>
+    </div>
+
+    <div class="panel">
+      <strong>Filter Summary</strong>
+      <div id="filterStats" class="stats"></div>
+    </div>
+
+    <div class="panel">
+      <strong>Ranked Candidates</strong>
+      <div style="overflow-x:auto;margin-top:0.7rem;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Student</th>
+              <th>Branch / CGPA</th>
+              <th>Status</th>
+              <th>Total Score</th>
+              <th>Breakdown</th>
+              <th>Skills</th>
+            </tr>
+          </thead>
+          <tbody id="candidateRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const form = document.getElementById("matchForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const loading = document.getElementById("loading");
+    const resultSection = document.getElementById("resultSection");
+    const errorBox = document.getElementById("errorBox");
+    const constraintsPre = document.getElementById("constraintsPre");
+    const filterStats = document.getElementById("filterStats");
+    const candidateRows = document.getElementById("candidateRows");
+
+    function esc(value) {
+      return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function parseStudentIds(raw) {
+      const tokens = raw.split(",").map((v) => v.trim()).filter(Boolean);
+      const out = [];
+      for (const token of tokens) {
+        const n = Number.parseInt(token, 10);
+        if (Number.isFinite(n) && n > 0) out.push(n);
+      }
+      return [...new Set(out)];
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBox.classList.add("hidden");
+      errorBox.textContent = "";
+      resultSection.classList.add("hidden");
+      submitBtn.disabled = true;
+      loading.classList.add("active");
+
+      const jdText = document.getElementById("jd_text").value.trim();
+      const studentIdsRaw = document.getElementById("student_ids").value.trim();
+      const topKRaw = document.getElementById("top_k").value.trim();
+
+      const payload = { jd_text: jdText };
+      const parsedIds = parseStudentIds(studentIdsRaw);
+      if (parsedIds.length > 0) payload.student_ids = parsedIds;
+      if (topKRaw) {
+        const topK = Number.parseInt(topKRaw, 10);
+        if (Number.isFinite(topK) && topK > 0) payload.top_k = topK;
+      }
+
+      try {
+        const res = await fetch("/student/match-jd", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const detail = data && data.detail ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)) : "Request failed";
+          throw new Error(detail);
+        }
+
+        constraintsPre.textContent = JSON.stringify(data.jd || {}, null, 2);
+
+        filterStats.innerHTML = "";
+        const filters = data.filters || {};
+        const labels = [
+          ["Total", filters.total_considered ?? 0],
+          ["Passed", filters.passed_filters ?? 0],
+          ["Min CGPA", filters.rejected_min_cgpa ?? 0],
+          ["Branch", filters.rejected_branch ?? 0],
+          ["Gender", filters.rejected_gender ?? 0],
+          ["Backlog", filters.rejected_backlog ?? 0],
+          ["Placement", filters.rejected_placement ?? 0],
+        ];
+        for (const [key, val] of labels) {
+          const card = document.createElement("div");
+          card.className = "stat";
+          card.innerHTML = `<div class="k">${esc(key)}</div><div class="v">${esc(val)}</div>`;
+          filterStats.appendChild(card);
+        }
+
+        candidateRows.innerHTML = "";
+        const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+        if (candidates.length === 0) {
+          const row = document.createElement("tr");
+          row.innerHTML = `<td colspan="7" class="muted">No candidates matched current constraints.</td>`;
+          candidateRows.appendChild(row);
+        } else {
+          candidates.forEach((c, idx) => {
+            const b = c.score_breakdown || {};
+            const row = document.createElement("tr");
+            row.innerHTML = `
+              <td>${idx + 1}</td>
+              <td>
+                <div><strong>${esc(c.name || "-")}</strong></div>
+                <div class="muted">${esc(c.email || "-")}</div>
+                <div class="mono muted">${esc(c.roll_no || "-")}</div>
+              </td>
+              <td>${esc(c.branch || "-")} / ${esc(c.cgpa ?? "-")}</td>
+              <td>
+                <div>Gender: ${esc(c.gender || "-")}</div>
+                <div>Placed: ${esc(Boolean(c.is_placed))}</div>
+                <div>Backlog: ${esc(Boolean(c.has_active_backlog))}</div>
+              </td>
+              <td><strong>${esc(b.total ?? 0)}</strong></td>
+              <td class="mono">
+                req ${esc(b.required_skills ?? 0)}<br/>
+                pref ${esc(b.preferred_tools_traits ?? 0)}<br/>
+                cgpa ${esc(b.cgpa ?? 0)}<br/>
+                branch ${esc(b.branch_affinity ?? 0)}
+              </td>
+              <td>${esc((c.skills || []).join(", ") || "-")}</td>
+            `;
+            candidateRows.appendChild(row);
+          });
+        }
+
+        resultSection.classList.remove("hidden");
+      } catch (err) {
+        errorBox.textContent = err && err.message ? err.message : "Network error";
+        errorBox.classList.remove("hidden");
+      } finally {
+        submitBtn.disabled = false;
+        loading.classList.remove("active");
+      }
+    });
+  </script>
+</body>
+</html>

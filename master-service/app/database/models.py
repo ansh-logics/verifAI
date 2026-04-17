@@ -26,6 +26,7 @@ class Student(Base):
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
     branch: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     cgpa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gender: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     cgpa_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
