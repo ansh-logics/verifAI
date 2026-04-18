@@ -6,11 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database.models import RawUpload, Student
 from app.schemas.student import FilterSummary, JDParsedConstraints, MatchCandidate, ScoreBreakdown
-
-REQUIRED_WEIGHT = 50.0
-PREFERRED_WEIGHT = 20.0
-CGPA_WEIGHT = 20.0
-BRANCH_WEIGHT = 10.0
+from core_engine import calculate_candidate_score
 
 
 def _to_bool(value: Any) -> bool:
@@ -23,7 +19,7 @@ def _to_bool(value: Any) -> bool:
     return False
 
 
-def _normalize_skill_list(values: list[str] | None) -> set[str]:
+def _normalize_text_set(values: list[str] | None) -> set[str]:
     if not values:
         return set()
     return {v.strip().lower() for v in values if isinstance(v, str) and v.strip()}
@@ -61,38 +57,6 @@ def _extract_status_flags(student: Student) -> tuple[bool, bool]:
     return is_placed, has_active_backlog
 
 
-def _required_score(student_skills: set[str], required: set[str]) -> float:
-    if not required:
-        return REQUIRED_WEIGHT
-    overlap = len(student_skills.intersection(required))
-    return round((overlap / len(required)) * REQUIRED_WEIGHT, 2)
-
-
-def _preferred_score(student_skills: set[str], preferred: set[str]) -> float:
-    if not preferred:
-        return 0.0
-    overlap = len(student_skills.intersection(preferred))
-    return round((overlap / len(preferred)) * PREFERRED_WEIGHT, 2)
-
-
-def _cgpa_score(cgpa: float | None, min_cgpa: float | None) -> float:
-    if cgpa is None:
-        return 0.0
-    if min_cgpa is None:
-        return round((max(0.0, min(cgpa, 10.0)) / 10.0) * CGPA_WEIGHT, 2)
-    if cgpa <= min_cgpa:
-        return 0.0
-    span = max(0.1, 10.0 - min_cgpa)
-    normalized = min(1.0, max(0.0, (cgpa - min_cgpa) / span))
-    return round(normalized * CGPA_WEIGHT, 2)
-
-
-def _branch_score(student_branch: str, allowed_branches: set[str]) -> float:
-    if not allowed_branches:
-        return 0.0
-    return BRANCH_WEIGHT if student_branch.lower().strip() in allowed_branches else 0.0
-
-
 def run_jd_matching(
     *,
     db: Session,
@@ -109,11 +73,7 @@ def run_jd_matching(
     students = query.all()
     summary.total_considered = len(students)
 
-    required_skills = _normalize_skill_list(constraints.required_skills)
-    preferred_combo = _normalize_skill_list(
-        (constraints.preferred_skills or []) + (constraints.tools_and_technologies or []) + (constraints.key_traits or [])
-    )
-    allowed_branches = _normalize_skill_list(constraints.allowed_branches)
+    allowed_branches = _normalize_text_set(constraints.allowed_branches)
     placement_exceptions = {r.strip().upper() for r in constraints.placement_exception_roll_nos}
 
     accepted: list[tuple[float, MatchCandidate]] = []
@@ -148,13 +108,19 @@ def run_jd_matching(
 
         profile = student.profile
         student_skill_list = list(profile.skills or []) if profile is not None else []
-        student_skills = _normalize_skill_list(student_skill_list)
 
-        req_score = _required_score(student_skills, required_skills)
-        pref_score = _preferred_score(student_skills, preferred_combo)
-        cgpa_component = _cgpa_score(student.cgpa, constraints.min_cgpa)
-        branch_component = _branch_score(student_branch, allowed_branches)
-        total = round(req_score + pref_score + cgpa_component + branch_component, 2)
+        engine_scores = calculate_candidate_score(
+            resume=profile.resume_data if profile and isinstance(profile.resume_data, dict) else {},
+            github=profile.github_data if profile and isinstance(profile.github_data, dict) else {},
+            leetcode=profile.leetcode_data if profile and isinstance(profile.leetcode_data, dict) else {},
+            academics=profile.academic_data if profile and isinstance(profile.academic_data, dict) else {},
+            coding={
+                "github": profile.github_data if profile and isinstance(profile.github_data, dict) else {},
+                "leetcode": profile.leetcode_data if profile and isinstance(profile.leetcode_data, dict) else {},
+            },
+            jd=jd_data,
+        )
+        total = float(engine_scores["final_score"])
 
         accepted.append(
             (
@@ -173,10 +139,10 @@ def run_jd_matching(
                     is_placed=is_placed,
                     has_active_backlog=has_backlog,
                     score_breakdown=ScoreBreakdown(
-                        required_skills=req_score,
-                        preferred_tools_traits=pref_score,
-                        cgpa=cgpa_component,
-                        branch_affinity=branch_component,
+                        resume=float(engine_scores["resume_score"]),
+                        github=float(engine_scores["github_score"]),
+                        leetcode=float(engine_scores["leetcode_score"]),
+                        academics=float(engine_scores["academic_score"]),
                         total=total,
                     ),
                 ),

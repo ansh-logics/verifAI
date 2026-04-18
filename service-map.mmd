@@ -1,0 +1,41 @@
+flowchart LR
+  user[User]
+  web[WebNextApp]
+  master[MasterServiceFastAPI]
+  profileService[ProfileService]
+  masterService[MasterServiceOrchestrator]
+  matchingService[MatchingService]
+  coreEngine[CoreEngineScoring]
+  downstream[DownstreamHttpClient]
+  resumeAnalyzer[ResumeAnalyzer]
+  codingAnalyzer[CodingAnalyzer]
+  marksheetAnalyzer[MarksheetAnalyzer]
+  jdAnalyzer[JDAnalyzer]
+  postgres[(PostgresDB)]
+  cloudinary[(CloudinaryStorage)]
+
+  user --> web
+  user --> master
+  web -->|"REST calls"| master
+
+  master -->|"auth/profile CRUD"| profileService
+  master -->|"analyze + incremental analyze"| masterService
+  master -->|"JD parsing + shortlist"| matchingService
+  master -->|"db session"| postgres
+
+  profileService -->|"read/write students + student_profiles + raw_uploads"| postgres
+
+  masterService --> downstream
+  masterService -->|"score_existing_analysis"| coreEngine
+  masterService -->|"resume upload"| cloudinary
+  masterService -->|"persist normalized payload through API/service layer"| postgres
+
+  downstream -->|"POST /analyze-resume"| resumeAnalyzer
+  downstream -->|"POST /analyze-coding-profile"| codingAnalyzer
+  downstream -->|"POST /analyze-marksheet"| marksheetAnalyzer
+  downstream -->|"POST /analyze-jd"| jdAnalyzer
+
+  matchingService -->|"load student + profile + uploads"| postgres
+  matchingService -->|"calculate_candidate_score per candidate"| coreEngine
+
+  coreEngine -->|"uses resume_data/github_data/leetcode_data/academic_data + jd constraints"| matchingService

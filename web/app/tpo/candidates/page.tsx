@@ -36,10 +36,10 @@ type UICandidate = {
   isPlaced: boolean;
   hasBacklog: boolean;
   score: {
-    required: number;
-    preferred: number;
-    cgpa: number;
-    branch: number;
+    resume: number;
+    github: number;
+    leetcode: number;
+    academics: number;
     total: number;
   };
 };
@@ -92,10 +92,10 @@ function toCandidate(raw: JDMatchCandidate): UICandidate {
     isPlaced: raw.is_placed,
     hasBacklog: raw.has_active_backlog,
     score: {
-      required: raw.score_breakdown.required_skills,
-      preferred: raw.score_breakdown.preferred_tools_traits,
-      cgpa: raw.score_breakdown.cgpa,
-      branch: raw.score_breakdown.branch_affinity,
+      resume: raw.score_breakdown.resume,
+      github: raw.score_breakdown.github,
+      leetcode: raw.score_breakdown.leetcode,
+      academics: raw.score_breakdown.academics,
       total: raw.score_breakdown.total,
     },
   };
@@ -426,15 +426,15 @@ export default function TpoDashboardPage() {
                                     <div className="space-y-4">
                                       <h4 className="text-sm font-semibold text-slate-900">Score Breakdown</h4>
                                       {([
-                                        ["Required Skills", c.score.required],
-                                        ["Preferred + Tools + Traits", c.score.preferred],
-                                        ["CGPA Component", c.score.cgpa],
-                                        ["Branch Affinity", c.score.branch],
-                                        ["Total", c.score.total],
-                                      ] as const).map(([label, value]) => (
+                                        ["Resume vs JD", c.score.resume, 40],
+                                        ["GitHub", c.score.github, 20],
+                                        ["LeetCode", c.score.leetcode, 20],
+                                        ["Academics", c.score.academics, 20],
+                                        ["Total", c.score.total, 100],
+                                      ] as const).map(([label, value, maxValue]) => (
                                         <div key={label} className="space-y-1.5">
                                           <div className="flex items-center justify-between gap-3 text-xs"><span className="text-slate-500">{label}</span><span className="font-medium tabular-nums text-slate-700">{value.toFixed(1)}</span></div>
-                                          <Progress value={clamp01(value / 100) * 100} className="h-1.5 bg-slate-200" />
+                                          <Progress value={clamp01(value / maxValue) * 100} className="h-1.5 bg-slate-200" />
                                         </div>
                                       ))}
                                     </div>
@@ -469,56 +469,56 @@ export default function TpoDashboardPage() {
 
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl z-50 px-4">
               {(() => {
-                const isRich = isInputExpanded || !!fileUpload;
                 const fileExt = fileUpload ? (fileUpload.name.match(/\.([^.]+)$/)?.[1] || "FILE").toUpperCase() : "";
                 const fileBase = fileUpload ? fileUpload.name.replace(/\.[^.]+$/, "") : "";
                 return (
                   <motion.div
                     ref={composerRef}
                     layout
-                    transition={{ layout: { type: "spring", stiffness: 300, damping: 38, mass: 0.9 } }}
-                    className={cn(
-                      "bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)]",
-                      isRich ? "rounded-[28px] p-3 flex flex-col gap-2" : "rounded-full p-2 flex items-center gap-2"
-                    )}
+                    transition={{ layout: { type: "spring", stiffness: 320, damping: 36, mass: 0.85 } }}
+                    className="bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] rounded-[28px] p-3 flex flex-col"
                   >
-                    {fileUpload && (
-                      <motion.div
-                        layout
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="flex flex-wrap gap-2 px-1"
-                      >
-                        <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl pl-2 pr-2 py-2 max-w-[260px]">
-                          <div className="size-9 rounded-lg bg-red-500 text-white flex items-center justify-center shrink-0">
-                            <FileText className="size-4" />
-                          </div>
-                          <div className="min-w-0 pr-1">
-                            <div className="text-sm font-medium text-slate-900 truncate leading-tight" title={fileUpload.name}>
-                              {fileBase}
+                    <AnimatePresence initial={false}>
+                      {fileUpload && (
+                        <motion.div
+                          key="file-chip"
+                          layout
+                          initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                          animate={{ opacity: 1, height: "auto", marginBottom: 8 }}
+                          exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 34, mass: 0.9 }}
+                          className="flex flex-wrap gap-2 px-1 overflow-hidden"
+                        >
+                          <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl pl-2 pr-2 py-2 max-w-[260px]">
+                            <div className="size-9 rounded-lg bg-red-500 text-white flex items-center justify-center shrink-0">
+                              <FileText className="size-4" />
                             </div>
-                            <div className="text-[11px] text-slate-500 uppercase leading-tight tracking-wide">
-                              {fileExt}
+                            <div className="min-w-0 pr-1">
+                              <div className="text-sm font-medium text-slate-900 truncate leading-tight" title={fileUpload.name}>
+                                {fileBase}
+                              </div>
+                              <div className="text-[11px] text-slate-500 uppercase leading-tight tracking-wide">
+                                {fileExt}
+                              </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => setFileUpload(null)}
+                              className="ml-1 size-5 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center shrink-0"
+                              aria-label="Remove JD file"
+                            >
+                              <X className="size-3 text-slate-600" />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setFileUpload(null)}
-                            className="ml-1 size-5 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center shrink-0"
-                            aria-label="Remove JD file"
-                          >
-                            <X className="size-3 text-slate-600" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     <motion.div
                       layout
-                      className={cn("min-w-0 relative overflow-hidden", isRich ? "w-full px-1" : "flex-1")}
+                      className="min-w-0 relative overflow-hidden w-full px-1"
                       animate={{ height: isInputExpanded ? composerInputHeight : COMPACT_HEIGHT }}
-                      transition={{ type: "spring", stiffness: 260, damping: 34, mass: 0.95 }}
+                      transition={{ type: "spring", stiffness: 280, damping: 34, mass: 0.9 }}
                     >
                       <AnimatePresence mode="wait" initial={false}>
                         {!isInputExpanded ? (
@@ -526,10 +526,10 @@ export default function TpoDashboardPage() {
                             key="collapsed-preview"
                             type="button"
                             onClick={handleExpandInput}
-                            initial={{ opacity: 0, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 4 }}
-                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18, ease: "easeInOut" }}
                             className="h-full w-full text-left text-base leading-6 text-slate-700 placeholder:text-slate-400 truncate overflow-hidden pr-4 inline-flex items-center [mask-image:linear-gradient(to_right,black_85%,transparent)]"
                           >
                             {collapsedPreview || "Describe JD and constraints or upload JD file..."}
@@ -543,10 +543,10 @@ export default function TpoDashboardPage() {
                             onFocus={handleExpandInput}
                             onClick={handleExpandInput}
                             placeholder="Describe JD and constraints or upload JD file..."
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            transition={{ duration: 0.22, ease: "easeInOut" }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.18, ease: "easeInOut" }}
                             className="h-full w-full resize-none bg-transparent border-none focus:outline-none text-slate-700 placeholder:text-slate-400 text-base leading-6 py-1 whitespace-pre-wrap overflow-y-auto"
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
@@ -559,47 +559,25 @@ export default function TpoDashboardPage() {
                       </AnimatePresence>
                     </motion.div>
 
-                    {isRich ? (
-                      <motion.div layout className="flex items-center justify-between pt-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={loading}
-                          className="shrink-0 rounded-full size-10 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        >
-                          <UploadCloud className="size-5" />
-                        </Button>
-                        <Button
-                          onClick={() => void runMatch()}
-                          disabled={loading || (!fileUpload && jdInput.trim().length < 20)}
-                          className="rounded-full h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
-                        >
-                          {loading ? <Loader2 className="size-5 animate-spin" /> : "Analyze"}
-                        </Button>
-                      </motion.div>
-                    ) : (
-                      <>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={loading}
-                          className="shrink-0 rounded-full size-10 text-slate-400 hover:text-slate-600 hover:bg-slate-100 order-first"
-                        >
-                          <UploadCloud className="size-5" />
-                        </Button>
-                        <Button
-                          onClick={() => void runMatch()}
-                          disabled={loading || (!fileUpload && jdInput.trim().length < 20)}
-                          className="rounded-full h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
-                        >
-                          {loading ? <Loader2 className="size-5 animate-spin" /> : "Analyze"}
-                        </Button>
-                      </>
-                    )}
+                    <div className="flex items-center justify-between pt-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={loading}
+                        className="shrink-0 rounded-full size-10 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      >
+                        <UploadCloud className="size-5" />
+                      </Button>
+                      <Button
+                        onClick={() => void runMatch()}
+                        disabled={loading || (!fileUpload && jdInput.trim().length < 20)}
+                        className="rounded-full h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
+                      >
+                        {loading ? <Loader2 className="size-5 animate-spin" /> : "Analyze"}
+                      </Button>
+                    </div>
 
                     <input
                       ref={fileInputRef}

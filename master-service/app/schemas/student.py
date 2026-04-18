@@ -243,10 +243,10 @@ class JDMatchRequest(BaseModel):
 
 
 class ScoreBreakdown(BaseModel):
-    required_skills: float = Field(default=0.0, ge=0, le=50)
-    preferred_tools_traits: float = Field(default=0.0, ge=0, le=20)
-    cgpa: float = Field(default=0.0, ge=0, le=20)
-    branch_affinity: float = Field(default=0.0, ge=0, le=10)
+    resume: float = Field(default=0.0, ge=0, le=40)
+    github: float = Field(default=0.0, ge=0, le=20)
+    leetcode: float = Field(default=0.0, ge=0, le=20)
+    academics: float = Field(default=0.0, ge=0, le=20)
     total: float = Field(default=0.0, ge=0, le=100)
 
 

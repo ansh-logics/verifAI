@@ -307,10 +307,10 @@
               </td>
               <td><strong>${esc(b.total ?? 0)}</strong></td>
               <td class="mono">
-                req ${esc(b.required_skills ?? 0)}<br/>
-                pref ${esc(b.preferred_tools_traits ?? 0)}<br/>
-                cgpa ${esc(b.cgpa ?? 0)}<br/>
-                branch ${esc(b.branch_affinity ?? 0)}
+                resume ${esc(b.resume ?? 0)}<br/>
+                github ${esc(b.github ?? 0)}<br/>
+                leetcode ${esc(b.leetcode ?? 0)}<br/>
+                academics ${esc(b.academics ?? 0)}
               </td>
               <td>${esc((c.skills || []).join(", ") || "-")}</td>
             `;

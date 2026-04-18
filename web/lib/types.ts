@@ -182,10 +182,10 @@ export interface JDMatchSubmitInput {
 }
 
 export interface JDMatchScoreBreakdown {
-  required_skills: number;
-  preferred_tools_traits: number;
-  cgpa: number;
-  branch_affinity: number;
+  resume: number;
+  github: number;
+  leetcode: number;
+  academics: number;
   total: number;
 }
 

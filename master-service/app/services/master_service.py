@@ -55,12 +55,6 @@ def _clamp_score(value: float | None) -> float:
     return max(0.0, min(100.0, float(value)))
 
 
-def _academic_score(cgpa: float | None) -> float:
-    if cgpa is None:
-        return 0.0
-    return _clamp_score((cgpa / 10.0) * 100.0)
-
-
 def has_candidate_basic_details(marksheet: dict[str, Any] | None) -> bool:
     if not isinstance(marksheet, dict):
         return False

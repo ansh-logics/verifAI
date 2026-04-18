@@ -1,0 +1,61 @@
+Project verifai_master_service {
+  database_type: "PostgreSQL"
+  Note: "Schema derived from master-service SQLAlchemy models."
+}
+
+Table students {
+  id int [pk, increment]
+  name varchar(255) [not null]
+  email varchar(255) [not null, unique]
+  roll_no varchar(64) [unique, note: "Nullable unique roll number"]
+  password_hash varchar(255) [not null, default: ""]
+  phone varchar(32) [not null]
+  branch varchar(128) [not null]
+  cgpa float
+  gender varchar(16) [not null]
+  cgpa_verified boolean [not null, default: false]
+  created_at timestamptz [not null]
+
+  indexes {
+    email [name: "ix_students_email", unique]
+    roll_no [name: "ix_students_roll_no_lookup"]
+    branch [name: "ix_students_branch"]
+    gender [name: "ix_students_gender"]
+  }
+}
+
+Table student_profiles {
+  id int [pk, increment]
+  student_id int [not null, unique]
+  skills text[] [not null, note: "Primary skill array used for search/filter"]
+  coding_persona varchar(128) [not null, default: ""]
+  coding_score float [not null, default: 0]
+  academic_score float [not null, default: 0]
+  overall_score float [not null, default: 0]
+  github_data jsonb [not null, note: "Raw/normalized GitHub analyzer payload"]
+  leetcode_data jsonb [not null, note: "Raw/normalized LeetCode analyzer payload"]
+  resume_data jsonb [not null, note: "Raw/normalized resume analyzer payload"]
+  academic_data jsonb [not null, note: "Raw/normalized marksheet analyzer payload"]
+  skills_json json [not null, note: "JSON mirror of skills for portability"]
+  last_analyzed_at timestamptz [not null]
+
+  indexes {
+    student_id [name: "ix_student_profiles_student_id", unique]
+    (skills) [name: "ix_student_profiles_skills_gin", type: gin]
+  }
+}
+
+Table raw_uploads {
+  id int [pk, increment]
+  student_id int [not null]
+  resume_url varchar(1024)
+  marksheet_url varchar(1024)
+  uploaded_at timestamptz [not null]
+
+  indexes {
+    student_id [name: "ix_raw_uploads_student_id"]
+  }
+}
+
+Ref: student_profiles.student_id > students.id [delete: cascade]
+Ref: raw_uploads.student_id > students.id [delete: cascade]

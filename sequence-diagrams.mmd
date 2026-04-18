@@ -1,0 +1,68 @@
+sequenceDiagram
+  autonumber
+
+  box Frontend
+    participant U as User
+    participant W as WebOrTemplateUI
+  end
+
+  box MasterService
+    participant API as FastAPIStudentRoutes
+    participant MS as MasterServiceOrchestrator
+    participant MCH as MatchingService
+    participant CE as CoreEngine
+    participant DB as Postgres
+    participant CL as Cloudinary
+  end
+
+  box DownstreamAnalyzers
+    participant RA as ResumeAnalyzer
+    participant CA as CodingAnalyzer
+    participant MA as MarksheetAnalyzer
+    participant JA as JDAnalyzer
+  end
+
+  rect rgb(245, 245, 245)
+    Note over U,CL: Flow A - Student Analyze and Persist Profile
+    U->>W: Upload resume + marksheet + branch + usernames
+    W->>API: POST /student/analyze
+    API->>MS: analyze_student_profile(...)
+    par Parallel analyzer calls
+      MS->>RA: POST /analyze-resume (file)
+      RA-->>MS: resume_data
+    and
+      MS->>CA: POST /analyze-coding-profile (usernames)
+      CA-->>MS: coding_data
+    and
+      MS->>MA: POST /analyze-marksheet (file)
+      MA-->>MS: marksheet_data
+    end
+    MS->>CE: score_existing_analysis(resume,coding,marksheet)
+    CE-->>MS: resume/github/leetcode/academic/final scores
+    MS->>CL: upload_resume_to_cloudinary(resume_file)
+    CL-->>MS: resume_url
+    MS-->>API: normalized student/profile payload
+    API->>DB: Save students + student_profiles + raw_uploads via profile service
+    DB-->>API: persisted row ids
+    API-->>W: StudentAnalyzeResponse / StudentProfileStoreResponse
+  end
+
+  rect rgb(245, 245, 245)
+    Note over U,CL: Flow B - JD Match and Candidate Ranking
+    U->>W: Enter JD text and/or upload JD file
+    W->>API: POST /student/match-jd
+    API->>API: Parse multipart or JSON, merge jd sources
+    API->>JA: POST /analyze-jd (merged_jd_text)
+    JA-->>API: jd_data constraints
+    API->>MCH: run_jd_matching(db,jd_data,student_ids,top_k)
+    MCH->>DB: Query students + joined student_profiles
+    DB-->>MCH: candidate rows and profile blobs
+    loop For each candidate passing hard filters
+      MCH->>CE: calculate_candidate_score(resume,github,leetcode,academics,coding,jd)
+      CE-->>MCH: resume/github/leetcode/academics/final_score
+    end
+    MCH->>DB: Query latest raw_uploads for resume_url hydration
+    DB-->>MCH: latest upload URLs
+    MCH-->>API: constraints + filter summary + ranked candidates
+    API-->>W: JDMatchResponse
+  end
