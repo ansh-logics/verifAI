@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import get_settings
+from core_engine.service import score_existing_analysis
 from app.services.cloudinary_service import upload_resume_to_cloudinary
 from app.services.downstream import (
     DEFAULT_HEADERS,
@@ -88,12 +89,14 @@ def normalize_master_output(
     marksheet_cgpa = _safe_float(marksheet.get("cgpa_computed"))
     resume_cgpa = _safe_float(resume.get("cgpa"))
     final_cgpa = marksheet_cgpa if marksheet_cgpa is not None else resume_cgpa
-    coding_score = _clamp_score(_safe_float((coding.get("scores") or {}).get("overall_score")))
-    academic_score = _academic_score(final_cgpa)
-    if coding_score > 0 and academic_score > 0:
-        overall_score = round((coding_score * 0.6) + (academic_score * 0.4), 2)
-    else:
-        overall_score = max(coding_score, academic_score)
+    engine_scores = score_existing_analysis(
+        resume=resume,
+        coding=coding,
+        marksheet=marksheet,
+    )
+    coding_score = _clamp_score(engine_scores["coding_score"])
+    academic_score = _clamp_score(engine_scores["academic_score_percent"])
+    overall_score = _clamp_score(engine_scores["final_score"])
 
     github_data = coding.get("github") if isinstance(coding.get("github"), dict) else {}
     leetcode_data = coding.get("leetcode") if isinstance(coding.get("leetcode"), dict) else {}
@@ -115,8 +118,8 @@ def normalize_master_output(
         "coding": {
             "persona": coding_persona,
             "score": coding_score,
-            "github": {**github_data, "username": github_username},
-            "leetcode": {**leetcode_data, "username": leetcode_username},
+            "github": {**github_data, "username": github_username, "score": engine_scores["github_score"]},
+            "leetcode": {**leetcode_data, "username": leetcode_username, "score": engine_scores["leetcode_score"]},
         },
         "academics": {
             "cgpa": final_cgpa,
