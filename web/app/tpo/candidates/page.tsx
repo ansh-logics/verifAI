@@ -135,7 +135,7 @@ function CandidateFullDetails({ candidateId }: { candidateId: number }) {
         <div className="space-y-3">
           <h4 className="text-sm font-semibold text-slate-900">GitHub Stats</h4>
           <div className="text-sm text-slate-700">Followers: {data.github_data.followers || 0}</div>
-          <div className="text-sm text-slate-700">Public Repos: {data.github_data.public_repos || 0}</div>
+          <div className="text-sm text-slate-700">Public Repos: {data.github_data.repos || 0}</div>
           {data.github_data.languages?.length > 0 && (
             <div className="text-sm text-slate-700">Top Languages: {data.github_data.languages.slice(0, 3).join(", ")}</div>
           )}
@@ -144,9 +144,9 @@ function CandidateFullDetails({ candidateId }: { candidateId: number }) {
       {hasLeetcode && (
         <div className="space-y-3">
           <h4 className="text-sm font-semibold text-slate-900">LeetCode Stats</h4>
-          <div className="text-sm text-slate-700">Solved: {data.leetcode_data.totalSolved || 0} / {data.leetcode_data.totalQuestions || 0}</div>
-          <div className="text-sm text-slate-700">Easy: {data.leetcode_data.easySolved || 0}, Medium: {data.leetcode_data.mediumSolved || 0}, Hard: {data.leetcode_data.hardSolved || 0}</div>
-          <div className="text-sm text-slate-700">Rating: {Math.round(data.leetcode_data.rating || 0)}</div>
+          <div className="text-sm text-slate-700">Solved: {data.leetcode_data.total_solved || 0}</div>
+          <div className="text-sm text-slate-700">Easy: {data.leetcode_data.easy || 0}, Medium: {data.leetcode_data.medium || 0}, Hard: {data.leetcode_data.hard || 0}</div>
+          <div className="text-sm text-slate-700">Rating: {Math.round(data.leetcode_data.contest_rating || data.leetcode_data.ranking || 0)}</div>
         </div>
       )}
       {!hasGithub && !hasLeetcode && (

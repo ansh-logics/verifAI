@@ -51,9 +51,16 @@ def _extract_status_flags(student: Student) -> tuple[bool, bool]:
         return False, False
     resume_data = profile.resume_data if isinstance(profile.resume_data, dict) else {}
     academic_data = profile.academic_data if isinstance(profile.academic_data, dict) else {}
+    
     metadata = resume_data.get("metadata") if isinstance(resume_data.get("metadata"), dict) else {}
     is_placed = _to_bool(metadata.get("is_placed"))
-    has_active_backlog = _to_bool(metadata.get("has_active_backlog")) or _to_bool(academic_data.get("has_active_backlog"))
+    
+    resume_backlog = _to_bool(metadata.get("has_active_backlog"))
+    
+    backlog_dict = academic_data.get("backlog") if isinstance(academic_data.get("backlog"), dict) else {}
+    academic_backlog = _to_bool(backlog_dict.get("has_active_backlog"))
+    
+    has_active_backlog = resume_backlog or academic_backlog
     return is_placed, has_active_backlog
 
 
@@ -110,11 +117,24 @@ def run_jd_matching(
         profile = student.profile
         student_skill_list = list(profile.skills or []) if profile is not None else []
 
+        resume_data = dict(profile.resume_data) if profile and isinstance(profile.resume_data, dict) else {}
+        # Merge unified profile skills into resume_data so score evaluation finds them
+        if student_skill_list:
+            existing_skills = list(resume_data.get("skills") or [])
+            if not existing_skills:
+                resume_data["skills"] = student_skill_list
+            else:
+                resume_data["skills"] = list(set(existing_skills + student_skill_list))
+
+        academics_input = dict(profile.academic_data) if profile and isinstance(profile.academic_data, dict) else {}
+        if student.cgpa is not None:
+            academics_input["cgpa"] = student.cgpa
+
         engine_scores = calculate_candidate_score(
-            resume=profile.resume_data if profile and isinstance(profile.resume_data, dict) else {},
+            resume=resume_data,
             github=profile.github_data if profile and isinstance(profile.github_data, dict) else {},
             leetcode=profile.leetcode_data if profile and isinstance(profile.leetcode_data, dict) else {},
-            academics=profile.academic_data if profile and isinstance(profile.academic_data, dict) else {},
+            academics=academics_input,
             coding={
                 "github": profile.github_data if profile and isinstance(profile.github_data, dict) else {},
                 "leetcode": profile.leetcode_data if profile and isinstance(profile.leetcode_data, dict) else {},
