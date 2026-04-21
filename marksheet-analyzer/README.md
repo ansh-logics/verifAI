@@ -85,3 +85,42 @@ Response example:
 - CGPA is computed as the mean of latest-attempt semester SGPAs.
 - Backlog detection is based on COP codes present in latest attempts per semester.
 - If declaration date is missing, fallback ordering uses session year and document order.
+
+## Synthetic Dataset Generator
+
+Use this to generate paired synthetic PDFs for bulk testing:
+- one resume PDF
+- one AKTU-like One View marksheet PDF
+- one JSONL manifest row per student
+
+### Generate 500 paired documents (default)
+
+```bash
+python scripts/generate_bulk_documents.py --out-dir generated_docs
+```
+
+### Generate with explicit count and deterministic seed
+
+```bash
+python scripts/generate_bulk_documents.py --count 500 --seed 42 --out-dir generated_docs
+```
+
+Output structure:
+
+```text
+generated_docs/
+├── resumes/
+├── marksheets/
+└── metadata/
+    └── students.jsonl
+```
+
+### Validate generated dataset
+
+This performs:
+- manifest + file existence checks
+- parser smoke test on a sample of generated marksheets
+
+```bash
+python scripts/validate_generated_documents.py --dataset-dir generated_docs --sample-size 25 --seed 7
+```

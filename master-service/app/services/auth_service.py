@@ -35,6 +35,16 @@ class AuthService:
         }
         return jwt.encode(payload, self.settings.auth_jwt_secret, algorithm=self.settings.auth_jwt_algorithm)
 
+    def create_tpo_access_token(self, *, username: str) -> str:
+        expire = datetime.now(UTC) + timedelta(minutes=self.settings.tpo_access_token_expire_minutes)
+        payload: dict[str, Any] = {
+            "sub": username,
+            "role": "tpo",
+            "exp": expire,
+            "iat": datetime.now(UTC),
+        }
+        return jwt.encode(payload, self.settings.auth_jwt_secret, algorithm=self.settings.auth_jwt_algorithm)
+
     def decode_access_token(self, token: str) -> dict[str, Any]:
         try:
             return jwt.decode(

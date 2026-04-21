@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.database.models import RawUpload, Student
 from app.schemas.student import FilterSummary, JDParsedConstraints, MatchCandidate, ScoreBreakdown
@@ -47,20 +47,22 @@ def _parse_constraints(jd_data: dict[str, Any]) -> JDParsedConstraints:
 
 def _extract_status_flags(student: Student) -> tuple[bool, bool]:
     profile = student.profile
+    is_placed = any(getattr(rec, "is_active", False) for rec in getattr(student, "placements", []))
+    has_active_backlog = bool(getattr(student, "has_active_backlog", False))
     if profile is None:
-        return False, False
+        return is_placed, has_active_backlog
     resume_data = profile.resume_data if isinstance(profile.resume_data, dict) else {}
     academic_data = profile.academic_data if isinstance(profile.academic_data, dict) else {}
     
     metadata = resume_data.get("metadata") if isinstance(resume_data.get("metadata"), dict) else {}
-    is_placed = _to_bool(metadata.get("is_placed"))
+    is_placed = is_placed or _to_bool(metadata.get("is_placed"))
     
     resume_backlog = _to_bool(metadata.get("has_active_backlog"))
     
     backlog_dict = academic_data.get("backlog") if isinstance(academic_data.get("backlog"), dict) else {}
     academic_backlog = _to_bool(backlog_dict.get("has_active_backlog"))
     
-    has_active_backlog = resume_backlog or academic_backlog
+    has_active_backlog = has_active_backlog or resume_backlog or academic_backlog
     return is_placed, has_active_backlog
 
 
@@ -74,7 +76,7 @@ def run_jd_matching(
     constraints = _parse_constraints(jd_data)
     summary = FilterSummary()
 
-    query = db.query(Student).options(joinedload(Student.profile))
+    query = db.query(Student).options(joinedload(Student.profile), selectinload(Student.placements))
     if student_ids:
         query = query.filter(Student.id.in_(student_ids))
     students_iter = query.yield_per(1000)

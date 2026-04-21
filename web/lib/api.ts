@@ -11,7 +11,15 @@ import type {
   SearchResponse,
   StudentProfileDetail,
   StudentProfilePayload,
+  TpoCreateGroupRequest,
+  TpoAuthTokenResponse,
+  TpoGroup,
+  TpoMailActionRequest,
+  TpoMailActionResponse,
+  TpoLoginRequestBody,
+  TpoPlacementRequest,
 } from "@/lib/types";
+import { getStoredTpoToken } from "@/lib/auth-storage";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8082";
@@ -74,6 +82,11 @@ export async function login(body: LoginRequestBody): Promise<AuthTokenResponse> 
   return data;
 }
 
+export async function tpoLogin(body: TpoLoginRequestBody): Promise<TpoAuthTokenResponse> {
+  const { data } = await api.post<TpoAuthTokenResponse>("/student/tpo/login", body);
+  return data;
+}
+
 export async function registerAccount(
   body: RegisterRequestBody,
 ): Promise<RegisterResponseBody> {
@@ -109,16 +122,24 @@ export async function analyzeProfileIncremental(
 
 export async function matchCandidatesWithJd(
   body: JDMatchRequestBody,
+  tpoToken?: string | null,
 ): Promise<JDMatchResponseBody> {
-  const { data } = await api.post<JDMatchResponseBody>("/student/match-jd", body);
+  const token = tpoToken ?? getStoredTpoToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const { data } = await api.post<JDMatchResponseBody>("/student/match-jd", body, { headers });
   return data;
 }
 
 export async function matchCandidatesWithJdMultipart(
   formData: FormData,
+  tpoToken?: string | null,
 ): Promise<JDMatchResponseBody> {
+  const token = tpoToken ?? getStoredTpoToken();
   const { data } = await api.post<JDMatchResponseBody>("/student/match-jd", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: {
+      "Content-Type": "multipart/form-data",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
   return data;
 }
@@ -129,6 +150,7 @@ export async function searchCandidates(
   minCgpa: number | null = null,
   branch: string | null = null,
   limit: number = 50,
+  tpoToken?: string | null,
 ): Promise<SearchResponse> {
   const params = new URLSearchParams({
     q: query,
@@ -144,15 +166,66 @@ export async function searchCandidates(
     params.append("branch", branch);
   }
 
+  const token = tpoToken ?? getStoredTpoToken();
+  const headers = token
+    ? { Authorization: `Bearer ${token}` }
+    : { "x-tpo-api-key": TPO_API_KEY };
   const { data } = await api.get<SearchResponse>(`/search?${params.toString()}`, {
-    headers: { "x-tpo-api-key": TPO_API_KEY },
+    headers,
   });
   return data;
 }
 
-export async function getSearchCandidateDetails(candidateId: number): Promise<any> {
+export async function getSearchCandidateDetails(candidateId: number, tpoToken?: string | null): Promise<any> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const headers = token
+    ? { Authorization: `Bearer ${token}` }
+    : { "x-tpo-api-key": TPO_API_KEY };
   const { data } = await api.get(`/search/${candidateId}/details`, {
-    headers: { "x-tpo-api-key": TPO_API_KEY },
+    headers,
+  });
+  return data;
+}
+
+export async function createTpoGroup(body: TpoCreateGroupRequest, tpoToken?: string | null): Promise<TpoGroup> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.post<TpoGroup>("/student/tpo/groups", body, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function listTpoGroups(tpoToken?: string | null): Promise<TpoGroup[]> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.get<TpoGroup[]>("/student/tpo/groups", {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function deleteTpoGroup(groupId: number, tpoToken?: string | null): Promise<TpoMailActionResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.delete<TpoMailActionResponse>(`/student/tpo/groups/${groupId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function markStudentPlacement(body: TpoPlacementRequest, tpoToken?: string | null): Promise<SaveProfileResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.post<SaveProfileResponse>("/student/tpo/placement", body, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function triggerTpoMailAction(
+  body: TpoMailActionRequest,
+  tpoToken?: string | null,
+): Promise<TpoMailActionResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.post<TpoMailActionResponse>("/student/tpo/mail", body, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   return data;
 }

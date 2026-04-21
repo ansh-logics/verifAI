@@ -5,9 +5,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { CheckCircle2, FileText, Loader2, Target, Trophy, UploadCloud, Users, X, Download } from "lucide-react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
 
-import { matchCandidatesWithJd, matchCandidatesWithJdMultipart, getSearchCandidateDetails } from "@/lib/api";
-import type { JDMatchCandidate, JDMatchFilters, JDParsedConstraints } from "@/lib/types";
+import {
+  createTpoGroup,
+  getSearchCandidateDetails,
+  listTpoGroups,
+  markStudentPlacement,
+  matchCandidatesWithJd,
+  matchCandidatesWithJdMultipart,
+  searchCandidates,
+} from "@/lib/api";
+import { clearTpoAuth } from "@/lib/auth-storage";
+import type {
+  JDMatchCandidate,
+  JDMatchFilters,
+  JDParsedConstraints,
+  SearchResultCandidate,
+  TpoGroup,
+} from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,6 +121,7 @@ function toCandidate(raw: JDMatchCandidate): UICandidate {
 function CandidateFullDetails({ candidateId }: { candidateId: number }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     let mounted = true;
@@ -116,12 +134,16 @@ function CandidateFullDetails({ candidateId }: { candidateId: number }) {
       })
       .catch((err) => {
         console.error(err);
+        if (axios.isAxiosError(err) && [401, 403].includes(err.response?.status ?? 0)) {
+          clearTpoAuth();
+          router.replace("/tpo/login");
+        }
         if (mounted) setLoading(false);
       });
     return () => {
       mounted = false;
     };
-  }, [candidateId]);
+  }, [candidateId, router]);
 
   if (loading) return <div className="text-sm text-slate-500 animate-pulse">Loading detailed profile...</div>;
   if (!data) return <div className="text-sm text-slate-500">Failed to load detailed profile.</div>;
@@ -157,6 +179,7 @@ function CandidateFullDetails({ candidateId }: { candidateId: number }) {
 }
 
 export default function TpoDashboardPage() {
+  const router = useRouter();
   const composerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const jdTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -176,6 +199,16 @@ export default function TpoDashboardPage() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [composerInputHeight, setComposerInputHeight] = useState(48);
+  const [groups, setGroups] = useState<TpoGroup[]>([]);
+  const [groupTitle, setGroupTitle] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [placingStudentId, setPlacingStudentId] = useState<number | null>(null);
+  const [lastCreatedGroupId, setLastCreatedGroupId] = useState<number | null>(null);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [manualSearchQuery, setManualSearchQuery] = useState("");
+  const [manualSearchLoading, setManualSearchLoading] = useState(false);
+  const [manualResults, setManualResults] = useState<SearchResultCandidate[]>([]);
+  const [manualSelected, setManualSelected] = useState<Record<number, SearchResultCandidate>>({});
 
   const COMPACT_HEIGHT = 48;
   const EXPANDED_MIN_HEIGHT = 200;
@@ -281,16 +314,14 @@ export default function TpoDashboardPage() {
       setCandidates(response.candidates.map(toCandidate));
       setParsedJD(response.jd);
       setFilters(response.filters);
-      const initialSkills = Array.from(
-        new Set([
-          ...(response.jd.required_skills ?? []),
-          ...(response.jd.preferred_skills ?? []),
-          ...(response.jd.tools_and_technologies ?? []),
-        ].map((s) => s.trim()).filter(Boolean)),
-      );
-      setSkills(initialSkills);
+      setSkills([]);
       setExpandedKey(null);
     } catch (error) {
+      if (axios.isAxiosError(error) && [401, 403].includes(error.response?.status ?? 0)) {
+        clearTpoAuth();
+        router.replace("/tpo/login");
+        return;
+      }
       const message = error instanceof Error ? error.message : "Failed to fetch candidates.";
       setErrorMessage(message);
       setCandidates([]);
@@ -343,8 +374,117 @@ export default function TpoDashboardPage() {
   }, [candidates]);
 
   useEffect(() => {
+    void listTpoGroups()
+      .then(setGroups)
+      .catch(() => {
+        // keep existing page usable if group APIs are unavailable
+      });
+  }, []);
+
+  useEffect(() => {
     resizeTextarea(isInputExpanded);
   }, [isInputExpanded, jdInput, loading]);
+
+  async function handleCreateGroup(): Promise<boolean> {
+    const title = groupTitle.trim() || `Analysis group ${new Date().toLocaleDateString()}`;
+    const studentIds = Array.from(new Set([...filtered.map((c) => c.id), ...Object.keys(manualSelected).map(Number)]));
+    if (studentIds.length === 0) {
+      toast.error("No shortlisted candidates to create group.");
+      return false;
+    }
+    setCreatingGroup(true);
+    try {
+      const created = await createTpoGroup({
+        title,
+        jd_summary: parsedJD?.jd_summary ?? (jdInput.trim() || null),
+        student_ids: studentIds,
+        company_name: parsedJD?.company_name ?? null,
+        role_type:
+          parsedJD?.role_type && ["internship", "job"].includes(parsedJD.role_type)
+            ? (parsedJD.role_type as "internship" | "job")
+            : null,
+        pay_or_stipend: parsedJD?.pay_or_stipend ?? null,
+        duration: parsedJD?.duration ?? null,
+        bond_details: parsedJD?.bond_details ?? null,
+        interview_timezone: "Asia/Kolkata",
+      });
+      setGroups((prev) => [created, ...prev]);
+      setLastCreatedGroupId(created.id);
+      setGroupTitle("");
+      setManualSelected({});
+      setManualResults([]);
+      setManualSearchQuery("");
+      toast.success("Analysis group created.");
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create group.";
+      toast.error(message);
+      return false;
+    } finally {
+      setCreatingGroup(false);
+    }
+  }
+
+  function openCreateGroupModal() {
+    setIsCreateGroupOpen(true);
+  }
+
+  function closeCreateGroupModal() {
+    if (creatingGroup) return;
+    setIsCreateGroupOpen(false);
+  }
+
+  async function handleMarkPlaced(studentId: number) {
+    setPlacingStudentId(studentId);
+    try {
+      await markStudentPlacement({
+        student_id: studentId,
+        company_name: "TBD Company",
+        offer_type: "job",
+        pay_amount: null,
+        notes: "Marked from TPO operate panel.",
+      });
+      setCandidates((prev) =>
+        prev.map((item) => (item.id === studentId ? { ...item, isPlaced: true } : item)),
+      );
+      toast.success("Student marked as placed.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to mark placement.";
+      toast.error(message);
+    } finally {
+      setPlacingStudentId(null);
+    }
+  }
+
+  async function handleManualSearch() {
+    const query = manualSearchQuery.trim();
+    if (!query) {
+      setManualResults([]);
+      return;
+    }
+    setManualSearchLoading(true);
+    try {
+      const response = await searchCandidates(query, 0, null, null, 15);
+      setManualResults(response.results);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to search students.";
+      toast.error(message);
+    } finally {
+      setManualSearchLoading(false);
+    }
+  }
+
+  function addManualCandidate(candidate: SearchResultCandidate) {
+    setManualSelected((prev) => ({ ...prev, [candidate.candidate_id]: candidate }));
+  }
+
+  function removeManualCandidate(candidateId: number) {
+    setManualSelected((prev) => {
+      const next = { ...prev };
+      delete next[candidateId];
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (isInputExpanded) jdTextareaRef.current?.focus();
@@ -378,6 +518,77 @@ export default function TpoDashboardPage() {
             </section>
 
             <section className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => router.push("/tpo/placement-groups")}>
+                    Open Placement Groups
+                  </Button>
+                </div>
+                <div className="mt-3 rounded-md border bg-white p-3">
+                  <p className="text-sm font-medium text-slate-800">Manual Add Students (search_engine)</p>
+                  <div className="mt-2 flex gap-2">
+                    <Input
+                      value={manualSearchQuery}
+                      onChange={(e) => setManualSearchQuery(e.target.value)}
+                      placeholder="Search by name, email, skill..."
+                      className="max-w-md"
+                    />
+                    <Button variant="outline" onClick={() => void handleManualSearch()} disabled={manualSearchLoading}>
+                      {manualSearchLoading ? "Searching..." : "Search"}
+                    </Button>
+                  </div>
+                  {manualResults.length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      {manualResults.map((candidate) => (
+                        <div
+                          key={candidate.candidate_id}
+                          className="flex items-center justify-between rounded border px-2 py-1 text-sm"
+                        >
+                          <span>
+                            {candidate.name} · {candidate.email} · {candidate.branch}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => addManualCandidate(candidate)}
+                            disabled={Boolean(manualSelected[candidate.candidate_id])}
+                          >
+                            {manualSelected[candidate.candidate_id] ? "Added" : "Add"}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {Object.keys(manualSelected).length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {Object.values(manualSelected).map((candidate) => (
+                        <Badge key={candidate.candidate_id} variant="secondary" className="gap-2">
+                          {candidate.name}
+                          <button onClick={() => removeManualCandidate(candidate.candidate_id)}>
+                            <X className="size-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-xs text-slate-600">
+                  Group management moved to <span className="font-medium">Placement Groups</span>.
+                  {lastCreatedGroupId ? (
+                    <>
+                      {" "}
+                      Latest group created:{" "}
+                      <button
+                        className="underline font-medium"
+                        onClick={() => router.push(`/tpo/placement-groups/${lastCreatedGroupId}`)}
+                      >
+                        View group #{lastCreatedGroupId}
+                      </button>
+                      .
+                    </>
+                  ) : null}
+                </p>
+              </div>
               <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <h2 className="text-lg font-semibold text-slate-900">Live JD shortlist</h2>
@@ -416,6 +627,14 @@ export default function TpoDashboardPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={openCreateGroupModal}
+                    disabled={creatingGroup || (filtered.length === 0 && Object.keys(manualSelected).length === 0)}
+                    className="h-9 rounded-full px-4"
+                  >
+                    Create Group
+                  </Button>
                   <Button variant="outline" size="sm" onClick={exportToCsv} className="h-9 rounded-full px-4 border-slate-200 text-slate-600 hover:bg-slate-50 gap-2">
                     <Download className="size-4" />
                     Export CSV
@@ -500,6 +719,19 @@ export default function TpoDashboardPage() {
                                       <div className="text-sm text-slate-700">Placed: {String(c.isPlaced)}</div>
                                       <div className="text-sm text-slate-700">Backlog: {String(c.hasBacklog)}</div>
                                       <div className="text-sm text-slate-700">Persona: {c.codingPersona}</div>
+                                      {!c.isPlaced ? (
+                                        <Button
+                                          size="sm"
+                                          className="mt-2"
+                                          disabled={placingStudentId === c.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void handleMarkPlaced(c.id);
+                                          }}
+                                        >
+                                          Mark placed
+                                        </Button>
+                                      ) : null}
                                     </div>
                                     <div className="space-y-3">
                                       <h4 className="text-sm font-semibold text-slate-900">Resume Link</h4>
@@ -646,6 +878,56 @@ export default function TpoDashboardPage() {
                 );
               })()}
             </div>
+            {isCreateGroupOpen ? (
+              <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-xl rounded-xl border bg-white p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold text-slate-900">Create Placement Group</h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Confirm group details before creating.
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Group title</label>
+                      <Input
+                        value={groupTitle}
+                        onChange={(e) => setGroupTitle(e.target.value)}
+                        placeholder="Group title (optional)"
+                      />
+                    </div>
+                    <div className="rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-700 space-y-1">
+                      <div>
+                        Shortlist students: <span className="font-medium">{filtered.length}</span>
+                      </div>
+                      <div>
+                        Manually added: <span className="font-medium">{Object.keys(manualSelected).length}</span>
+                      </div>
+                      <div>
+                        Total to add:{" "}
+                        <span className="font-medium">
+                          {new Set([...filtered.map((c) => c.id), ...Object.keys(manualSelected).map(Number)]).size}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-2">
+                    <Button variant="outline" onClick={closeCreateGroupModal} disabled={creatingGroup}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        const success = await handleCreateGroup();
+                        if (success) {
+                          setIsCreateGroupOpen(false);
+                        }
+                      }}
+                      disabled={creatingGroup || (filtered.length === 0 && Object.keys(manualSelected).length === 0)}
+                    >
+                      {creatingGroup ? "Creating..." : "Create Group"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             </div>
           </div>
   );

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
+import random
 
 from sqlalchemy import text
 
@@ -1609,6 +1611,133 @@ DEMO_STUDENTS: list[dict] = [
 ]
 
 
+PROJECT_CATALOG: list[tuple[str, list[str]]] = [
+    ("Campus Placement Predictor", ["python", "fastapi", "postgresql", "docker"]),
+    ("Resume Screening Assistant", ["python", "nlp", "react", "mongodb"]),
+    ("Attendance Dashboard", ["javascript", "react", "nodejs", "postgresql"]),
+    ("Issue Tracker", ["typescript", "nextjs", "nodejs", "mongodb"]),
+    ("Analytics Workbench", ["python", "sql", "power bi", "pandas"]),
+    ("IoT Monitoring Portal", ["embedded c", "arduino", "sensors", "javascript"]),
+]
+
+EXPERIENCE_TEMPLATES: list[str] = [
+    "Built APIs and backend jobs for student-facing workflow automation.",
+    "Improved dashboard responsiveness and reduced loading time with targeted optimizations.",
+    "Collaborated on feature delivery using sprint planning, code reviews, and Git workflows.",
+    "Added data quality checks and validation utilities for recruiter-facing reports.",
+]
+
+
+def _deterministic_rng(entry: dict) -> random.Random:
+    seed_material = f"{entry['email']}|{entry['roll_no']}|{entry['coding_score']}|{entry['cgpa']}"
+    digest = hashlib.sha256(seed_material.encode("utf-8")).hexdigest()
+    seed = int(digest[:16], 16)
+    return random.Random(seed)
+
+
+def _build_resume_data(entry: dict, rng: random.Random) -> dict:
+    base_skills = [str(skill).strip().lower() for skill in entry["skills"] if str(skill).strip()]
+    project_count = 2 if entry["coding_score"] >= 72 else 1
+    projects: list[dict] = []
+    for _ in range(project_count):
+        title, stack = rng.choice(PROJECT_CATALOG)
+        tech_stack = list(dict.fromkeys((base_skills[:2] + rng.sample(stack, k=min(2, len(stack))))))[:4]
+        projects.append(
+            {
+                "title": title,
+                "description": f"{title} implementation for academic and placement-focused use cases.",
+                "tech_stack": tech_stack,
+            }
+        )
+
+    exp_count = 2 if entry["coding_score"] >= 80 else 1
+    experience: list[dict] = []
+    for _ in range(exp_count):
+        experience.append(
+            {
+                "title": rng.choice(["Software Developer Intern", "Project Trainee", "Backend Intern"]),
+                "impact": rng.choice(EXPERIENCE_TEMPLATES),
+                "tech_stack": list(dict.fromkeys(rng.sample(base_skills, k=min(3, len(base_skills))))),
+            }
+        )
+
+    return {
+        "file_name": f"{entry['roll_no'].lower()}.pdf",
+        "summary": f"Demo resume for {entry['name']}",
+        "skills": base_skills,
+        "projects": projects,
+        "experience": experience,
+        "metadata": {
+            "has_active_backlog": entry["has_active_backlog"],
+            "is_placed": entry["is_placed"],
+        },
+    }
+
+
+def _build_academic_data(entry: dict) -> dict:
+    return {
+        "cgpa_computed": entry["cgpa"],
+        "cgpa": entry["cgpa"],
+        "has_active_backlog": entry["has_active_backlog"],
+    }
+
+
+def _build_github_data(entry: dict, rng: random.Random) -> dict:
+    normalized_skills = [str(skill).strip().lower() for skill in entry["skills"] if str(skill).strip()]
+    coding_score = float(entry["coding_score"])
+    repos = max(4, min(28, int(coding_score / 3) + rng.randint(0, 4)))
+    commits_30d = max(6, min(95, int(coding_score * 0.85) + rng.randint(-6, 10)))
+    followers = max(3, int(repos * 1.8) + rng.randint(0, 25))
+
+    repo_count = 3 if coding_score >= 75 else 2
+    repositories: list[dict] = []
+    for idx in range(repo_count):
+        title, stack = rng.choice(PROJECT_CATALOG)
+        tech_stack = list(dict.fromkeys((normalized_skills[:2] + stack)))[:4]
+        repositories.append(
+            {
+                "name": f"{title.lower().replace(' ', '-')}-{idx + 1}",
+                "language": tech_stack[0] if tech_stack else "python",
+                "tech_stack": tech_stack,
+                "stars": max(2, int(coding_score / 8) + rng.randint(0, 15)),
+            }
+        )
+
+    return {
+        "username": entry["roll_no"].lower().replace("-", "_"),
+        "repos": repos,
+        "public_repos": repos,
+        "followers": followers,
+        "last_30_day_commits": commits_30d,
+        "recent_commit_activity": commits_30d,
+        "languages": list(dict.fromkeys(normalized_skills[:3])),
+        "repositories": repositories,
+        "pinned_repositories": repositories[:2],
+    }
+
+
+def _build_leetcode_data(entry: dict, rng: random.Random) -> dict:
+    coding_score = float(entry["coding_score"])
+    solved = max(60, min(520, int(coding_score * 4.8) + rng.randint(-20, 25)))
+    hard = max(8, int(solved * (0.10 + rng.uniform(0.02, 0.06))))
+    medium = max(30, int(solved * (0.34 + rng.uniform(0.03, 0.08))))
+    easy = max(20, solved - medium - hard)
+    contest_count = max(3, min(26, int(coding_score / 4) + rng.randint(0, 4)))
+    contest_rating = max(1280, min(2120, int(1280 + (coding_score * 7.8) + rng.randint(-60, 75))))
+
+    return {
+        "username": entry["roll_no"].lower().replace("-", ""),
+        "total_solved": solved,
+        "totalSolved": solved,
+        "easy": easy,
+        "medium": medium,
+        "hard": hard,
+        "contest_rating": contest_rating,
+        "rating": contest_rating,
+        "contest_participation_count": contest_count,
+    }
+
+
 def reset_demo_tables() -> None:
     with SessionLocal() as db:
         db.execute(text("TRUNCATE TABLE raw_uploads, student_profiles, students RESTART IDENTITY CASCADE"))
@@ -1620,6 +1749,7 @@ def upsert_demo_students() -> None:
     now = datetime.now(UTC)
     with SessionLocal() as db:
         for entry in DEMO_STUDENTS:
+            rng = _deterministic_rng(entry)
             student = db.query(Student).filter(Student.email == entry["email"]).one_or_none()
             if student is None:
                 student = Student(
@@ -1645,30 +1775,10 @@ def upsert_demo_students() -> None:
                 student.cgpa_verified = True
 
             profile = db.query(StudentProfile).filter(StudentProfile.student_id == student.id).one_or_none()
-            resume_data = {
-                "file_name": f"{entry['roll_no'].lower()}.pdf",
-                "summary": f"Demo resume for {entry['name']}",
-                "metadata": {
-                    "has_active_backlog": entry["has_active_backlog"],
-                    "is_placed": entry["is_placed"],
-                },
-            }
-            academic_data = {
-                "cgpa_computed": entry["cgpa"],
-                "has_active_backlog": entry["has_active_backlog"],
-            }
-            github_data = {
-                "username": entry["roll_no"].lower().replace("-", "_"),
-                "repos": int(entry["coding_score"] // 5),
-                "languages": entry["skills"][:3],
-            }
-            leetcode_data = {
-                "username": entry["roll_no"].lower().replace("-", ""),
-                "total_solved": int(entry["coding_score"] * 3),
-                "easy": int(entry["coding_score"]),
-                "medium": int(entry["coding_score"] * 1.5),
-                "hard": int(entry["coding_score"] * 0.4),
-            }
+            resume_data = _build_resume_data(entry, rng)
+            academic_data = _build_academic_data(entry)
+            github_data = _build_github_data(entry, rng)
+            leetcode_data = _build_leetcode_data(entry, rng)
 
             if profile is None:
                 profile = StudentProfile(

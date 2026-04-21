@@ -71,6 +71,21 @@ def has_candidate_basic_details(marksheet: dict[str, Any] | None) -> bool:
     return bool(name and class_name and has_identity)
 
 
+def _coerce_existing_coding_payload(existing_coding_data: dict[str, Any] | None) -> dict[str, Any]:
+    source = dict(existing_coding_data or {})
+    persona = str(source.get("coding_persona") or source.get("coding_level") or source.get("persona") or "").strip()
+    github = source.get("github") if isinstance(source.get("github"), dict) else {}
+    leetcode = source.get("leetcode") if isinstance(source.get("leetcode"), dict) else {}
+    payload: dict[str, Any] = {
+        "github": dict(github),
+        "leetcode": dict(leetcode),
+        "coding_persona": persona,
+    }
+    if persona:
+        payload["coding_level"] = persona
+    return payload
+
+
 def normalize_master_output(
     *,
     resume: dict[str, Any],
@@ -228,12 +243,7 @@ async def analyze_student_profile_incremental(
 
     resume_data = dict(existing_resume_data or {})
     marksheet_data = dict(existing_marksheet_data or {})
-    coding_data = {
-        "github": dict((existing_coding_data or {}).get("github") or {}),
-        "leetcode": dict((existing_coding_data or {}).get("leetcode") or {}),
-        "scores": {"overall_score": (existing_coding_data or {}).get("score", 0)},
-        "coding_persona": (existing_coding_data or {}).get("persona", ""),
-    }
+    coding_data = _coerce_existing_coding_payload(existing_coding_data)
     resume_url = existing_resume_url
 
     async with httpx.AsyncClient(headers=DEFAULT_HEADERS) as client:

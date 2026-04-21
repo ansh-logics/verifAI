@@ -46,6 +46,7 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS roll_no VARCHAR(64)"))
         conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT ''"))
         conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS gender VARCHAR(16)"))
+        conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS has_active_backlog BOOLEAN DEFAULT FALSE"))
         conn.execute(text("UPDATE students SET password_hash = '' WHERE password_hash IS NULL"))
         conn.execute(text("UPDATE students SET gender = 'other' WHERE gender IS NULL OR trim(gender) = ''"))
         conn.execute(text("ALTER TABLE students ALTER COLUMN password_hash SET NOT NULL"))
@@ -53,12 +54,19 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_students_roll_no_unique ON students (roll_no)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_roll_no_lookup ON students (roll_no)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_gender ON students (gender)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_backlog ON students (has_active_backlog)"))
 
         # Keep student_profiles compatible with newer schema that mirrors skills in JSON.
         conn.execute(text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS skills_json JSON"))
         conn.execute(text("UPDATE student_profiles SET skills_json = to_json(skills) WHERE skills_json IS NULL"))
         conn.execute(text("ALTER TABLE student_profiles ALTER COLUMN skills_json SET DEFAULT '[]'::json"))
         conn.execute(text("ALTER TABLE student_profiles ALTER COLUMN skills_json SET NOT NULL"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS role_type VARCHAR(32)"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS pay_or_stipend VARCHAR(128)"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS duration VARCHAR(128)"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS bond_details TEXT"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS interview_timezone VARCHAR(64)"))
 
 
 @app.on_event("startup")

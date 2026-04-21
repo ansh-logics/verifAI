@@ -1,7 +1,20 @@
-import { ReactNode } from "react";
+"use client";
+
+import { ReactNode, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
+import { getStoredTpoToken } from "@/lib/auth-storage";
 
 export default function TpoLayout({ children }: { children: ReactNode }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = getStoredTpoToken();
+    if (!token) {
+      router.replace("/tpo/login");
+    }
+  }, [router]);
+
   return (
     <div className="flex h-screen w-full bg-[#0f111a] text-white font-sans selection:bg-blue-500/30 overflow-hidden">
       <Sidebar />

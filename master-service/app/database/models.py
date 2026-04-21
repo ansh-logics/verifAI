@@ -27,6 +27,7 @@ class Student(Base):
     cgpa: Mapped[float | None] = mapped_column(Float, nullable=True)
     gender: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     cgpa_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    has_active_backlog: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     profile: Mapped["StudentProfile | None"] = relationship(
@@ -35,6 +36,14 @@ class Student(Base):
         cascade="all, delete-orphan",
     )
     raw_uploads: Mapped[list["RawUpload"]] = relationship(
+        back_populates="student",
+        cascade="all, delete-orphan",
+    )
+    placements: Mapped[list["PlacementRecord"]] = relationship(
+        back_populates="student",
+        cascade="all, delete-orphan",
+    )
+    tpo_group_memberships: Mapped[list["TpoAnalysisGroupMember"]] = relationship(
         back_populates="student",
         cascade="all, delete-orphan",
     )
@@ -79,4 +88,53 @@ class RawUpload(Base):
     __table_args__ = (
         Index("ix_raw_uploads_student_uploaded", "student_id", "uploaded_at", "id"),
     )
+
+
+class PlacementRecord(Base):
+    __tablename__ = "placement_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    offer_type: Mapped[str] = mapped_column(String(32), nullable=False)  # internship or job
+    pay_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    student: Mapped[Student] = relationship(back_populates="placements")
+
+
+class TpoAnalysisGroup(Base):
+    __tablename__ = "tpo_analysis_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    jd_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    pay_or_stipend: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    duration: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bond_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    interview_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    members: Mapped[list["TpoAnalysisGroupMember"]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+
+class TpoAnalysisGroupMember(Base):
+    __tablename__ = "tpo_analysis_group_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("tpo_analysis_groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    group: Mapped[TpoAnalysisGroup] = relationship(back_populates="members")
+    student: Mapped[Student] = relationship(back_populates="tpo_group_memberships")
 

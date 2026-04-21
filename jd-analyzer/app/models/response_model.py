@@ -23,6 +23,10 @@ class JDAnalyzeRequest(BaseModel):
 
 
 class JDAnalyzeResponse(BaseModel):
+    company_name: str | None = None
+    pay_or_stipend: str | None = None
+    bond_details: str | None = None
+    jd_summary: str | None = None
     job_title: str | None = None
     role_type: RoleType = "unknown"
     required_skills: list[str] = Field(default_factory=list)

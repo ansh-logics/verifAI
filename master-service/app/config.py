@@ -28,11 +28,22 @@ class Settings(BaseSettings):
     auth_jwt_secret: str = "change-me-master-service-jwt-secret"
     auth_jwt_algorithm: str = "HS256"
     auth_access_token_expire_minutes: int = 120
+    tpo_username: str = "tpo"
+    tpo_password: str = "tpo12345"
+    tpo_access_token_expire_minutes: int = 240
+    tpo_allow_api_key_fallback: bool = True
+    tpo_api_key: str = "default-insecure-tpo-key"
     cors_allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:18084,http://127.0.0.1:18084,"
         "http://localhost:28084,http://127.0.0.1:28084"
     )
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "VerifAI TPO"
 
     @property
     def resume_base(self) -> str:

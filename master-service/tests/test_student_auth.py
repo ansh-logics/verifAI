@@ -48,8 +48,10 @@ class StudentAuthApiTests(unittest.TestCase):
 
     def _register(self, *, email: str, password: str = "StrongPass123") -> dict:
         payload = {
+            "name": "Ansh",
             "email": email,
             "password": password,
+            "phone": "9999999999",
         }
         response = self.client.post("/student/register", json=payload)
         return {"status": response.status_code, "json": response.json()}

@@ -83,14 +83,22 @@ export interface AuthTokenResponse {
   roll_no: string | null;
 }
 
+export interface TpoLoginRequestBody {
+  username: string;
+  password: string;
+}
+
+export interface TpoAuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  username: string;
+}
+
 export interface RegisterRequestBody {
+  name: string;
   email: string;
   password: string;
   phone: string;
-  roll_no: string;
-  branch: string;
-  cgpa: number;
-  gender: "women" | "men" | "other";
 }
 
 export interface RegisterResponseBody {
@@ -137,6 +145,85 @@ export interface StudentProfileDetail {
   leetcode_data: Record<string, unknown>;
   last_analyzed_at: string;
   created_at: string;
+  placement?: {
+    company_name: string;
+    offer_type: "internship" | "job";
+    pay_amount: number | null;
+    notes: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  } | null;
+}
+
+export interface TpoGroupMember {
+  student_id: number;
+  name: string;
+  email: string;
+  roll_no: string | null;
+  branch: string;
+  placement?: StudentProfileDetail["placement"];
+}
+
+export interface TpoGroup {
+  id: number;
+  title: string;
+  jd_summary: string | null;
+  created_by: string;
+  created_at: string;
+  company_name: string | null;
+  role_type: "internship" | "job" | null;
+  pay_or_stipend: string | null;
+  duration: string | null;
+  bond_details: string | null;
+  interview_timezone: string | null;
+  members: TpoGroupMember[];
+}
+
+export interface TpoCreateGroupRequest {
+  title: string;
+  jd_summary?: string | null;
+  student_ids: number[];
+  company_name?: string | null;
+  role_type?: "internship" | "job" | null;
+  pay_or_stipend?: string | null;
+  duration?: string | null;
+  bond_details?: string | null;
+  interview_timezone?: string | null;
+}
+
+export interface TpoPlacementRequest {
+  student_id: number;
+  group_id?: number;
+  company_name?: string | null;
+  offer_type?: "internship" | "job" | null;
+  pay_amount?: number | null;
+  notes?: string | null;
+}
+
+export type TpoMailType =
+  | "shortlist_notice"
+  | "prep_topics"
+  | "interview_schedule"
+  | "process_custom";
+
+export interface TpoMailActionRequest {
+  group_id: number;
+  mode: "bulk" | "individual";
+  mail_type: TpoMailType;
+  subject?: string;
+  body?: string;
+  student_id?: number;
+  prep_topics?: string[];
+  interview_date?: string;
+  interview_time_start?: string;
+  interview_time_end?: string;
+  additional_note?: string;
+}
+
+export interface TpoMailActionResponse {
+  success: boolean;
+  message: string;
 }
 
 export interface FormDataState {
@@ -216,6 +303,10 @@ export interface JDMatchFilters {
 }
 
 export interface JDParsedConstraints {
+  company_name?: string | null;
+  pay_or_stipend?: string | null;
+  bond_details?: string | null;
+  jd_summary?: string | null;
   job_title: string | null;
   role_type: "full_time" | "internship" | "contract" | "part_time" | "unknown";
   required_skills: string[];

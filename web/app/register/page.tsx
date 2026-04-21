@@ -21,36 +21,29 @@ import { Input } from "@/components/ui/input";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
-  const [rollNo, setRollNo] = useState("");
-  const [branch, setBranch] = useState("");
-  const [cgpa, setCgpa] = useState("");
-  const [gender, setGender] = useState<"women" | "men" | "other">("other");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cgpaValue = Number.parseFloat(cgpa);
     if (password.length < 8) {
       toast.error("Password must be at least 8 characters.");
       return;
     }
-    if (!Number.isFinite(cgpaValue) || cgpaValue < 0 || cgpaValue > 10) {
-      toast.error("CGPA must be a number between 0 and 10.");
+    if (!name.trim()) {
+      toast.error("Name is required.");
       return;
     }
     setLoading(true);
     try {
       await registerAccount({
+        name: name.trim(),
         email: email.trim(),
         password,
         phone: phone.trim(),
-        roll_no: rollNo.trim().toUpperCase(),
-        branch: branch.trim(),
-        cgpa: cgpaValue,
-        gender,
       });
       const auth = await login({
         identifier: email.trim(),
@@ -77,12 +70,16 @@ export default function RegisterPage() {
         <CardHeader>
           <CardTitle>Create account</CardTitle>
           <CardDescription>
-            Register with your core profile fields so JD matching can work
-            immediately.
+            Register with basic account details. Academic and profile details
+            will be captured in step 2.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="grid gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Name</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Email</label>
               <Input
@@ -111,48 +108,6 @@ export default function RegisterPage() {
                 required
                 minLength={7}
               />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Roll Number</label>
-              <Input
-                value={rollNo}
-                onChange={(e) => setRollNo(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Branch</label>
-              <Input
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">CGPA</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={10}
-                step="0.01"
-                value={cgpa}
-                onChange={(e) => setCgpa(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Gender</label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={gender}
-                onChange={(e) => setGender(e.target.value as "women" | "men" | "other")}
-                required
-              >
-                <option value="women">Women</option>
-                <option value="men">Men</option>
-                <option value="other">Other</option>
-              </select>
             </div>
             <div className="flex flex-col gap-3">
               <Button type="submit" disabled={loading}>

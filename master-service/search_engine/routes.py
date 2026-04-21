@@ -15,20 +15,38 @@ from sqlalchemy.orm import Session
 
 from app.database.database import get_db
 from app.database.models import Student, StudentProfile
+from app.dependencies.auth import get_optional_bearer_token
+from app.config import get_settings
+from app.services.auth_service import AuthService
 from search_engine.service import SearchQuery, SearchService
 
 logger = logging.getLogger(__name__)
 
 TPO_API_KEY = os.environ.get("TPO_API_KEY", "default-insecure-tpo-key")
 
-def verify_tpo_key(x_tpo_api_key: str = Header(None)):
-    if x_tpo_api_key != TPO_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid or missing TPO API Key")
+
+def verify_tpo_access(
+    token: str | None = Depends(get_optional_bearer_token),
+    x_tpo_api_key: str | None = Header(None),
+) -> None:
+    settings = get_settings()
+    if token:
+        auth = AuthService(settings)
+        try:
+            payload = auth.decode_access_token(token)
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid or expired token.") from None
+        if payload.get("role") != "tpo":
+            raise HTTPException(status_code=403, detail="TPO access required.")
+        return
+    if settings.tpo_allow_api_key_fallback and x_tpo_api_key == (settings.tpo_api_key or TPO_API_KEY):
+        return
+    raise HTTPException(status_code=403, detail="Invalid or missing TPO credentials")
 
 router = APIRouter(
     prefix="/search", 
     tags=["search"],
-    dependencies=[Depends(verify_tpo_key)]
+    dependencies=[Depends(verify_tpo_access)]
 )
 
 # Global search service instance

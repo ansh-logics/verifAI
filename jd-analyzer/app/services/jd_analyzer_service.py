@@ -26,6 +26,10 @@ RULES:
 - For preferred_skills: "good to have", "plus", "bonus", or "preferred" skills.
 - For key_traits: soft skills and personality traits (e.g. "team player", "self-starter").
 - For role_type: one of → "full_time" | "internship" | "contract" | "part_time" | "unknown"
+- Extract company_name from explicit company/organization/employer mentions when available.
+- Extract pay_or_stipend from stipend/salary/CTC/compensation statements as concise text.
+- Extract bond_details from service-agreement/bond/commitment clauses as concise text.
+- Generate jd_summary as a concise 2-4 sentence summary of the role and constraints.
 - Return canonical lowercase skill and trait tokens wherever possible.
 - Extract TPO constraints when present:
   - target_student_count: numeric count requested (e.g. "give me 50 students")
@@ -52,6 +56,10 @@ USER_PROMPT = """Parse this combined text (JD + optional TPO constraints) and re
 
 Return exactly this schema:
 {{
+  "company_name": "string | null",
+  "pay_or_stipend": "string | null",
+  "bond_details": "string | null",
+  "jd_summary": "string | null",
   "job_title": "string | null",
   "role_type": "full_time | internship | contract | part_time | unknown",
   "required_skills": ["string"],
@@ -296,6 +304,10 @@ def _normalize_output(raw: dict[str, Any]) -> JDAnalyzeResponse:
     )
 
     return JDAnalyzeResponse(
+        company_name=_normalize_nullable_string(raw.get("company_name")),
+        pay_or_stipend=_normalize_nullable_string(raw.get("pay_or_stipend") or raw.get("stipend") or raw.get("salary") or raw.get("ctc")),
+        bond_details=_normalize_nullable_string(raw.get("bond_details") or raw.get("bond") or raw.get("service_agreement")),
+        jd_summary=_normalize_nullable_string(raw.get("jd_summary") or raw.get("summary")),
         job_title=_normalize_nullable_string(raw.get("job_title")),
         role_type=role_type,
         required_skills=_to_string_list(raw.get("required_skills"), canonical=True),

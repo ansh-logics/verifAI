@@ -55,3 +55,21 @@ def get_optional_student_id(
         return int(sub)
     except (TypeError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token subject.")
+
+
+def get_current_tpo_user(
+    token: Annotated[str | None, Depends(get_optional_bearer_token)],
+) -> str:
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    auth = AuthService(get_settings())
+    try:
+        payload = auth.decode_access_token(token)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.") from None
+    if payload.get("role") != "tpo":
+        raise HTTPException(status_code=403, detail="TPO access required.")
+    subject = payload.get("sub")
+    if not isinstance(subject, str) or not subject.strip():
+        raise HTTPException(status_code=401, detail="Invalid token subject.")
+    return subject.strip()

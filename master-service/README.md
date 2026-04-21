@@ -34,6 +34,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 | GET | `/health` | Liveness |
 | POST | `/analyze-profile` | `multipart/form-data`: `file` (PDF/DOCX), optional `marksheet_file` (PDF), **`branch`** (required), optional `github_username`, `leetcode_username`, `codeforces_username` |
 | POST | `/student/match-jd` | `application/json`: `jd_text` (required), optional `student_ids`, optional `top_k`; parses JD via `jd-analyzer` and returns filtered + ranked students |
+| POST | `/student/tpo/login` | `application/json`: `username`, `password`; returns TPO bearer token |
 
 Returns JSON with **`report_version`: 2**, **`generated_at`**, normalized **`student`**, **`academics`** (from marksheet when provided), and **`profile`**, raw downstream payloads under **`sources`**, and status fields **`resume_ok`**, **`resume_error`**, **`coding_ok`**, **`coding_skipped`**, **`coding_error`**, **`marksheet_ok`**, **`marksheet_skipped`**, **`marksheet_error`**. HTTP **502** only if both resume and coding fail; **200** for partial success. **400** if `branch` is missing or whitespace-only.
 
@@ -151,3 +152,17 @@ Response includes:
 | `CLOUDINARY_API_KEY` | `` |
 | `CLOUDINARY_API_SECRET` | `` |
 | `CLOUDINARY_RESUME_FOLDER` | `verifAI/resumes` |
+| `AUTH_JWT_SECRET` | `change-me-master-service-jwt-secret` |
+| `AUTH_JWT_ALGORITHM` | `HS256` |
+| `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | `120` |
+| `TPO_USERNAME` | `tpo` |
+| `TPO_PASSWORD` | `tpo12345` |
+| `TPO_ACCESS_TOKEN_EXPIRE_MINUTES` | `240` |
+| `TPO_ALLOW_API_KEY_FALLBACK` | `true` |
+| `TPO_API_KEY` | `default-insecure-tpo-key` |
+
+## TPO dashboard auth
+
+- Login using `POST /student/tpo/login` to receive a bearer token.
+- `/student/match-jd` and `/search/*` accept `Authorization: Bearer <tpo_token>`.
+- API key fallback remains available only when `TPO_ALLOW_API_KEY_FALLBACK=true`.

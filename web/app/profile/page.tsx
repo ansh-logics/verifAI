@@ -167,6 +167,24 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Placement status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {profile.placement?.is_active ? (
+                <>
+                  <div>Company: {profile.placement.company_name}</div>
+                  <div>Type: {profile.placement.offer_type}</div>
+                  <div>Pay/Stipend: {profile.placement.pay_amount ?? "—"}</div>
+                  <div>Notes: {profile.placement.notes || "—"}</div>
+                </>
+              ) : (
+                <div className="text-muted-foreground">Not placed yet.</div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="md:col-span-2">
             <CardHeader>
               <CardTitle className="text-base">Skills</CardTitle>

@@ -488,6 +488,7 @@ export default function DashboardPage() {
           phone: resolvedPhone,
           branch: resolvedBranch,
           cgpa: Number.isNaN(cgpaValue) ? null : cgpaValue,
+          gender: effectiveAnalysis.student.gender ?? "other",
           cgpa_verified: effectiveAnalysis.academics.verified,
         },
         skills: effectiveAnalysis.skills,
