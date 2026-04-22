@@ -21,9 +21,9 @@ def tokenize(text: str) -> list[str]:
     if not text:
         return []
 
-    # Lowercase and remove non-alphanumeric except + # .
+    # Lowercase and remove non-alphanumeric except + # . @ _ -
     text = text.lower()
-    text = re.sub(r"[^a-z0-9+#.\s]", " ", text)
+    text = re.sub(r"[^a-z0-9+#.@_\-\s]", " ", text)
 
     # Split and filter empty
     tokens = [t.strip() for t in text.split() if t.strip()]

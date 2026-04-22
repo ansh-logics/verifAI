@@ -28,8 +28,9 @@ class CandidateDocument:
     projects: list[str]
     coding_score: float
     overall_score: float
-    # All text searchable fields combined
     searchable_text: str
+    github_username: str = ""
+    leetcode_username: str = ""
 
     # Pre-computed tokens for this candidate
     tokens: set[str] = field(default_factory=set, init=False)
@@ -91,6 +92,18 @@ def build_searchable_text(candidate_data: dict[str, Any]) -> str:
     # Name (weighted by including multiple times)
     if name := candidate_data.get("name"):
         parts.append(str(name).lower())
+
+    # Email
+    if email := candidate_data.get("email"):
+        parts.append(str(email).lower())
+
+    # GitHub Username
+    if github_user := candidate_data.get("github_username"):
+        parts.append(str(github_user).lower())
+
+    # LeetCode Username
+    if leetcode_user := candidate_data.get("leetcode_username"):
+        parts.append(str(leetcode_user).lower())
 
     # Skills
     if skills := candidate_data.get("skills"):
@@ -179,6 +192,8 @@ def create_candidate_document(
     github_data = profile.get("github_data", {})
     if not isinstance(github_data, dict):
         github_data = {}
+    
+    github_username = str(github_data.get("username", "")).strip()
 
     github_languages = github_data.get("languages", [])
     if not isinstance(github_languages, list):
@@ -191,6 +206,12 @@ def create_candidate_document(
             for repo in repos:
                 if isinstance(repo, dict) and (repo_name := repo.get("name")):
                     github_repos.append(str(repo_name).lower())
+
+    leetcode_data = profile.get("leetcode_data", {})
+    if not isinstance(leetcode_data, dict):
+        leetcode_data = {}
+    
+    leetcode_username = str(leetcode_data.get("username", "")).strip()
 
     projects = []
     if resume_data := profile.get("resume_data"):
@@ -208,6 +229,8 @@ def create_candidate_document(
         {
             "name": name,
             "email": email,
+            "github_username": github_username,
+            "leetcode_username": leetcode_username,
             "branch": branch,
             "skills": skills,
             "github_data": github_data,
@@ -224,6 +247,8 @@ def create_candidate_document(
         skills=skills,
         github_languages=github_languages,
         github_repos=github_repos,
+        github_username=github_username,
+        leetcode_username=leetcode_username,
         projects=projects,
         coding_score=coding_score,
         overall_score=overall_score,

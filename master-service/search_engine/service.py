@@ -85,6 +85,7 @@ class SearchService:
                         profile_data={
                             "skills": candidate.get("skills", []),
                             "github_data": candidate.get("github_data", {}),
+                            "leetcode_data": candidate.get("leetcode_data", {}),
                             "resume_data": candidate.get("resume_data", {}),
                             "coding_score": candidate.get("coding_score", 0.0),
                             "overall_score": candidate.get("overall_score", 0.0),
@@ -200,4 +201,5 @@ class SearchService:
     def clear_index(self) -> None:
         """Clear the index."""
         self.index = InvertedIndex()
+        self.matcher = QueryMatcher(self.index)
         self.initialized = False
