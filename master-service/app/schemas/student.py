@@ -253,6 +253,8 @@ class TpoGroupCreateRequest(BaseModel):
     pay_or_stipend: str | None = Field(default=None, max_length=128)
     duration: str | None = Field(default=None, max_length=128)
     bond_details: str | None = Field(default=None, max_length=4000)
+    jd_topics: list[str] = Field(default_factory=list)
+    jd_key_points: list[str] = Field(default_factory=list)
     interview_timezone: str | None = Field(default=None, max_length=64)
 
 
@@ -276,6 +278,8 @@ class TpoGroupResponse(BaseModel):
     pay_or_stipend: str | None = None
     duration: str | None = None
     bond_details: str | None = None
+    jd_topics: list[str] = Field(default_factory=list)
+    jd_key_points: list[str] = Field(default_factory=list)
     interview_timezone: str | None = None
     members: list[TpoGroupMemberInfo] = Field(default_factory=list)
 

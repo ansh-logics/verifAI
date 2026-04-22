@@ -176,6 +176,8 @@ export interface TpoGroup {
   pay_or_stipend: string | null;
   duration: string | null;
   bond_details: string | null;
+  jd_topics: string[];
+  jd_key_points: string[];
   interview_timezone: string | null;
   members: TpoGroupMember[];
 }
@@ -189,6 +191,8 @@ export interface TpoCreateGroupRequest {
   pay_or_stipend?: string | null;
   duration?: string | null;
   bond_details?: string | null;
+  jd_topics?: string[];
+  jd_key_points?: string[];
   interview_timezone?: string | null;
 }
 

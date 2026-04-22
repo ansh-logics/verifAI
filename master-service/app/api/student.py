@@ -196,6 +196,74 @@ def _merge_jd_sources(file_text: str | None, typed_text: str | None) -> str:
     raise HTTPException(status_code=400, detail="Provide JD text and/or a JD file.")
 
 
+def _norm_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.strip().lower().split())
+
+
+def _norm_roll(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip().upper()
+
+
+def _extract_identity_from_blob(blob: dict[str, object] | None) -> dict[str, str]:
+    if not isinstance(blob, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key in ("name", "full_name", "candidate_name", "student_name"):
+        value = _norm_text(blob.get(key))
+        if value:
+            out["name"] = value
+            break
+    for key in ("email", "mail"):
+        value = _norm_text(blob.get(key))
+        if value:
+            out["email"] = value
+            break
+    for key in ("phone", "mobile", "contact", "phone_number"):
+        value = _norm_text(blob.get(key))
+        if value:
+            out["phone"] = value
+            break
+    for key in ("roll_no", "roll", "roll_number", "enrollment_no", "enrollment"):
+        value = _norm_roll(blob.get(key))
+        if value:
+            out["roll_no"] = value
+            break
+    return out
+
+
+def _assert_analysis_identity_matches_student(student: Student, normalized: dict[str, object]) -> None:
+    resume_identity = _extract_identity_from_blob(
+        normalized.get("resume_data") if isinstance(normalized.get("resume_data"), dict) else {}
+    )
+    marksheet_identity = _extract_identity_from_blob(
+        normalized.get("academic_data") if isinstance(normalized.get("academic_data"), dict) else {}
+    )
+    merged: dict[str, str] = {**resume_identity, **marksheet_identity}
+    expected = {
+        "name": _norm_text(student.name),
+        "email": _norm_text(student.email),
+        "phone": _norm_text(student.phone),
+        "roll_no": _norm_roll(student.roll_no),
+    }
+    for field, observed in merged.items():
+        target = expected.get(field, "")
+        if field == "roll_no" and not target:
+            # Permit first-time roll submission when account has no roll yet.
+            continue
+        if observed and target and observed != target:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Analysis blocked: uploaded resume/marksheet identity does not match your registered account. "
+                    f"Mismatch field: {field}."
+                ),
+            )
+
+
 @router.post("/analyze", response_model=StudentAnalyzeResponse)
 async def analyze_student(
     resume_file: UploadFile = File(...),
@@ -203,6 +271,8 @@ async def analyze_student(
     branch: str = Form(...),
     github_username: str = Form(...),
     leetcode_username: str = Form(...),
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
 ) -> StudentAnalyzeResponse:
     branch_clean = _require_non_empty(branch, "branch")
     github_clean = _require_non_empty(github_username, "github_username")
@@ -219,6 +289,9 @@ async def analyze_student(
         raise HTTPException(status_code=400, detail="Marksheet file is empty.")
     if len(resume_bytes) > MAX_FILE_BYTES or len(marksheet_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=413, detail="File size exceeds 8 MB limit.")
+    student = db.query(Student).filter(Student.id == student_id).one_or_none()
+    if student is None:
+        raise HTTPException(status_code=404, detail="Student not found.")
 
     try:
         normalized = await analyze_student_profile(
@@ -235,6 +308,7 @@ async def analyze_student(
     except ValueError as exc:
         logger.exception("Analyzer failure")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _assert_analysis_identity_matches_student(student, normalized)
 
     return StudentAnalyzeResponse.model_validate(normalized)
 
@@ -357,6 +431,7 @@ async def analyze_student_incremental(
         student_payload["branch"] = branch_clean
     if not student_payload.get("roll_no"):
         student_payload["roll_no"] = student.roll_no
+    _assert_analysis_identity_matches_student(student, normalized)
 
     return StudentAnalyzeResponse.model_validate(normalized)
 
@@ -407,6 +482,8 @@ def create_tpo_group(
         pay_or_stipend=metadata["pay_or_stipend"],
         duration=metadata["duration"],
         bond_details=metadata["bond_details"],
+        jd_topics=payload.jd_topics,
+        jd_key_points=payload.jd_key_points,
         interview_timezone=payload.interview_timezone,
         student_ids=payload.student_ids,
         created_by=tpo_user,
@@ -448,6 +525,8 @@ def create_tpo_group(
         pay_or_stipend=group.pay_or_stipend,
         duration=group.duration,
         bond_details=group.bond_details,
+        jd_topics=group.jd_topics or [],
+        jd_key_points=group.jd_key_points or [],
         interview_timezone=group.interview_timezone,
         members=members,
     )
@@ -500,6 +579,8 @@ def list_tpo_groups(
                 pay_or_stipend=group.pay_or_stipend,
                 duration=group.duration,
                 bond_details=group.bond_details,
+                jd_topics=group.jd_topics or [],
+                jd_key_points=group.jd_key_points or [],
                 interview_timezone=group.interview_timezone,
                 members=members,
             )
@@ -686,10 +767,50 @@ def _optional_note_block(additional_note: str | None) -> str:
     return f"\nAdditional Note:\n{note}\n"
 
 
+def _clean_lines(values: list[str] | None, limit: int = 6) -> list[str]:
+    if not values:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _jd_context_block(group: TpoAnalysisGroup) -> str:
+    topics = _clean_lines(group.jd_topics if isinstance(group.jd_topics, list) else [])
+    key_points = _clean_lines(group.jd_key_points if isinstance(group.jd_key_points, list) else [])
+    lines: list[str] = []
+    if topics:
+        lines.append("Primary Focus Areas:")
+        lines.extend(f"- {topic}" for topic in topics)
+    if key_points:
+        if lines:
+            lines.append("")
+        lines.append("Important JD Points:")
+        lines.extend(f"- {point}" for point in key_points)
+    if not lines:
+        summary = (group.jd_summary or "").strip()
+        if summary:
+            return f"JD Context:\n{summary[:400]}\n"
+        return ""
+    return "\n".join(lines) + "\n"
+
+
 def _render_subject_and_body(payload: TpoMailActionRequest, student: Student, group: TpoAnalysisGroup) -> tuple[str, str]:
     company = (group.company_name or "the company").strip()
     role = (group.role_type or "job opportunity").strip()
     note_block = _optional_note_block(payload.additional_note)
+    jd_block = _jd_context_block(group)
 
     if payload.mail_type == "shortlist_notice":
         subject = (payload.subject or f"Shortlist Update: {company} {role.title()}").strip()
@@ -700,6 +821,7 @@ def _render_subject_and_body(payload: TpoMailActionRequest, student: Student, gr
             f"- Company: {company}\n"
             f"- Role: {role}\n"
             "- Status: Shortlisted for next stage\n"
+            f"{jd_block}\n"
             f"{note_block}\n"
             "Please keep checking the placement portal and your email for further updates.\n\n"
             "Best regards,\n"
@@ -711,14 +833,17 @@ def _render_subject_and_body(payload: TpoMailActionRequest, student: Student, gr
     if payload.mail_type == "prep_topics":
         topics = [topic.strip() for topic in payload.prep_topics if topic.strip()]
         if not topics:
+            topics = _clean_lines(group.jd_topics if isinstance(group.jd_topics, list) else [])
+        if not topics:
             raise HTTPException(status_code=400, detail="prep_topics requires at least one topic.")
         subject = (payload.subject or f"Preparation Guide: {company} {role.title()}").strip()
         topics_text = "\n".join(f"- {topic}" for topic in topics)
         body = (
             f"Dear {student.name},\n\n"
-            f"As part of the upcoming selection process for {company}, please prepare the following topics.\n\n"
+            f"As part of the upcoming selection process for {company}, please prepare the following topics for the {role} role.\n\n"
             "Preparation Topics:\n"
             f"{topics_text}\n"
+            f"{jd_block}\n"
             f"{note_block}\n"
             "Please revise these topics thoroughly before the next round.\n\n"
             "Best regards,\n"
@@ -744,6 +869,7 @@ def _render_subject_and_body(payload: TpoMailActionRequest, student: Student, gr
             f"- Date: {payload.interview_date}\n"
             f"- Time: {payload.interview_time_start} to {payload.interview_time_end}\n"
             f"- Timezone: {tz}\n"
+            f"{jd_block}\n"
             f"{note_block}\n"
             "Please join/report on time and keep your required documents ready.\n\n"
             "Best regards,\n"
@@ -756,7 +882,16 @@ def _render_subject_and_body(payload: TpoMailActionRequest, student: Student, gr
         if not payload.subject or not payload.body:
             raise HTTPException(status_code=400, detail="process_custom requires subject and body.")
         subject = payload.subject.strip()
-        body = payload.body.strip().replace("{student_name}", student.name).replace("{company_name}", company)
+        personalized_body = payload.body.strip().replace("{student_name}", student.name).replace("{company_name}", company)
+        body = (
+            f"Dear {student.name},\n\n"
+            f"{personalized_body}\n\n"
+            f"{jd_block}\n"
+            f"{note_block}\n"
+            "Best regards,\n"
+            "Training and Placement Office\n"
+            "VerifAI"
+        ).strip()
         return subject, body
 
     raise HTTPException(status_code=400, detail="Unsupported mail type.")

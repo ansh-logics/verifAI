@@ -61,9 +61,15 @@ export function getApiErrorMessage(error: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-export async function analyzeProfile(formData: FormData): Promise<AnalyzeResponse> {
+export async function analyzeProfile(
+  formData: FormData,
+  accessToken: string,
+): Promise<AnalyzeResponse> {
   const { data } = await api.post<AnalyzeResponse>("/student/analyze", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: {
+      "Content-Type": "multipart/form-data",
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
   return data;
 }

@@ -410,6 +410,12 @@ export default function TpoDashboardPage() {
         pay_or_stipend: parsedJD?.pay_or_stipend ?? null,
         duration: parsedJD?.duration ?? null,
         bond_details: parsedJD?.bond_details ?? null,
+        jd_topics: [
+          ...(parsedJD?.required_skills ?? []),
+          ...(parsedJD?.preferred_skills ?? []),
+          ...(parsedJD?.tools_and_technologies ?? []),
+        ],
+        jd_key_points: parsedJD?.responsibilities ?? [],
         interview_timezone: "Asia/Kolkata",
       });
       setGroups((prev) => [created, ...prev]);
@@ -484,7 +490,15 @@ export default function TpoDashboardPage() {
       setIsSearchLoading(true);
       setSearchError(null);
       try {
-        const response = await searchCandidates(searchQuery.trim(), 0, null, null, 50);
+        const minCgpaFilter = minCgpa.trim() ? Number(minCgpa.trim()) : null;
+        const branchFilter = branch !== "All" ? branch : null;
+        const response = await searchCandidates(
+          searchQuery.trim(),
+          0,
+          Number.isFinite(minCgpaFilter as number) ? minCgpaFilter : null,
+          branchFilter,
+          50,
+        );
         setSearchResults(response);
         setHasSearched(true);
       } catch (err) {
@@ -498,7 +512,7 @@ export default function TpoDashboardPage() {
         setIsSearchLoading(false);
       }
     },
-    [router],
+    [router, minCgpa, branch],
   );
 
   const debouncedSearch = useMemo(() => {

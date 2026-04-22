@@ -117,6 +117,8 @@ class TpoAnalysisGroup(Base):
     pay_or_stipend: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duration: Mapped[str | None] = mapped_column(String(128), nullable=True)
     bond_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    jd_topics: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    jd_key_points: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     interview_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

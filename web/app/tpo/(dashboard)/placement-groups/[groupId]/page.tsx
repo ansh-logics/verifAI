@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 
 export default function PlacementGroupDetailPage() {
@@ -37,6 +38,7 @@ export default function PlacementGroupDetailPage() {
   const [customBody, setCustomBody] = useState("");
   const [additionalNote, setAdditionalNote] = useState("");
   const [prepTopicsText, setPrepTopicsText] = useState("");
+  const [prepTopicsAutofilledForGroupId, setPrepTopicsAutofilledForGroupId] = useState<number | null>(null);
   const [interviewDate, setInterviewDate] = useState("");
   const [interviewStart, setInterviewStart] = useState("");
   const [interviewEnd, setInterviewEnd] = useState("");
@@ -85,6 +87,20 @@ export default function PlacementGroupDetailPage() {
       mounted = false;
     };
   }, [groupId, router]);
+
+  useEffect(() => {
+    setPrepTopicsAutofilledForGroupId(null);
+  }, [groupId]);
+
+  useEffect(() => {
+    if (!group || mailType !== "prep_topics") return;
+    if (prepTopicsAutofilledForGroupId === group.id) return;
+    if (prepTopicsText.trim()) return;
+    const topics = (group.jd_topics || []).map((topic) => topic.trim()).filter(Boolean);
+    if (!topics.length) return;
+    setPrepTopicsText(topics.join(", "));
+    setPrepTopicsAutofilledForGroupId(group.id);
+  }, [group, mailType, prepTopicsAutofilledForGroupId, prepTopicsText]);
 
   const sendBulkMail = async () => {
     if (!group) return;
@@ -278,16 +294,22 @@ export default function PlacementGroupDetailPage() {
           </div>
           <div className="flex gap-2">
             <Link href="/tpo/placement-groups">
-              <Button variant="outline">Back to groups</Button>
+              <Button variant="outline" className="h-9 rounded-full px-4 border-slate-200 text-slate-600 hover:bg-slate-50">
+                Back to groups
+              </Button>
             </Link>
-            <Button onClick={() => void sendBulkMail()} disabled={mailing || bulkPolling}>
+            <Button
+              onClick={() => void sendBulkMail()}
+              disabled={mailing || bulkPolling}
+              className="h-9 rounded-full px-5 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+            >
               Bulk mail
             </Button>
           </div>
         </div>
 
         {bulkMailJob ? (
-          <Card>
+          <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
             <CardHeader>
               <CardTitle>Bulk Mail Progress</CardTitle>
             </CardHeader>
@@ -311,7 +333,7 @@ export default function PlacementGroupDetailPage() {
           </Card>
         ) : null}
 
-        <Card>
+        <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
           <CardHeader>
             <CardTitle>JD Summary</CardTitle>
           </CardHeader>
@@ -320,7 +342,7 @@ export default function PlacementGroupDetailPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
           <CardHeader>
             <CardTitle>Mail Composer</CardTitle>
           </CardHeader>
@@ -329,7 +351,7 @@ export default function PlacementGroupDetailPage() {
               <select
                 value={mailType}
                 onChange={(e) => setMailType(e.target.value as TpoMailType)}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="h-9 w-full rounded-full bg-slate-50 border border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               >
                 <option value="shortlist_notice">Shortlist notice</option>
                 <option value="prep_topics">Preparation topics</option>
@@ -340,6 +362,7 @@ export default function PlacementGroupDetailPage() {
                 placeholder="Additional note (optional)"
                 value={additionalNote}
                 onChange={(e) => setAdditionalNote(e.target.value)}
+                className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 placeholder:text-slate-400"
               />
             </div>
             {mailType === "prep_topics" ? (
@@ -347,13 +370,29 @@ export default function PlacementGroupDetailPage() {
                 placeholder="Prep topics (comma separated)"
                 value={prepTopicsText}
                 onChange={(e) => setPrepTopicsText(e.target.value)}
+                className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 placeholder:text-slate-400"
               />
             ) : null}
             {mailType === "interview_schedule" ? (
               <div className="grid gap-3 md:grid-cols-3">
-                <Input type="date" value={interviewDate} onChange={(e) => setInterviewDate(e.target.value)} />
-                <Input type="time" value={interviewStart} onChange={(e) => setInterviewStart(e.target.value)} />
-                <Input type="time" value={interviewEnd} onChange={(e) => setInterviewEnd(e.target.value)} />
+                <Input
+                  type="date"
+                  value={interviewDate}
+                  onChange={(e) => setInterviewDate(e.target.value)}
+                  className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700"
+                />
+                <Input
+                  type="time"
+                  value={interviewStart}
+                  onChange={(e) => setInterviewStart(e.target.value)}
+                  className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700"
+                />
+                <Input
+                  type="time"
+                  value={interviewEnd}
+                  onChange={(e) => setInterviewEnd(e.target.value)}
+                  className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700"
+                />
               </div>
             ) : null}
             {mailType === "process_custom" ? (
@@ -362,19 +401,20 @@ export default function PlacementGroupDetailPage() {
                   placeholder="Custom subject"
                   value={customSubject}
                   onChange={(e) => setCustomSubject(e.target.value)}
+                  className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 placeholder:text-slate-400"
                 />
-                <textarea
+                <Textarea
                   value={customBody}
                   onChange={(e) => setCustomBody(e.target.value)}
                   placeholder="Custom body (supports {student_name}, {company_name})"
-                  className="min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="min-h-[100px] w-full rounded-2xl bg-slate-50 border-transparent hover:bg-slate-100 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400"
                 />
               </div>
             ) : null}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
           <CardHeader>
             <CardTitle>Group Members ({group.members.length})</CardTitle>
           </CardHeader>
@@ -408,6 +448,7 @@ export default function PlacementGroupDetailPage() {
                         variant="outline"
                         onClick={() => void sendIndividualMail(member.student_id)}
                         disabled={mailing || bulkPolling}
+                        className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
                       >
                         Mail
                       </Button>
@@ -416,6 +457,7 @@ export default function PlacementGroupDetailPage() {
                           size="sm"
                           onClick={() => void markPlaced(member.student_id)}
                           disabled={placingStudentId === member.student_id}
+                          className="h-8 rounded-full px-3 bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           Mark placed
                         </Button>

@@ -69,11 +69,37 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("UPDATE student_profiles SET skills_json = to_json(skills) WHERE skills_json IS NULL"))
         conn.execute(text("ALTER TABLE student_profiles ALTER COLUMN skills_json SET DEFAULT '[]'::json"))
         conn.execute(text("ALTER TABLE student_profiles ALTER COLUMN skills_json SET NOT NULL"))
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_student_profiles_github_username
+                ON student_profiles ((lower(trim(github_data->>'username'))))
+                WHERE trim(coalesce(github_data->>'username', '')) <> ''
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_student_profiles_leetcode_username
+                ON student_profiles ((lower(trim(leetcode_data->>'username'))))
+                WHERE trim(coalesce(leetcode_data->>'username', '')) <> ''
+                """
+            )
+        )
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS role_type VARCHAR(32)"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS pay_or_stipend VARCHAR(128)"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS duration VARCHAR(128)"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS bond_details TEXT"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS jd_topics JSON"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS jd_key_points JSON"))
+        conn.execute(text("UPDATE tpo_analysis_groups SET jd_topics = '[]'::json WHERE jd_topics IS NULL"))
+        conn.execute(text("UPDATE tpo_analysis_groups SET jd_key_points = '[]'::json WHERE jd_key_points IS NULL"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN jd_topics SET DEFAULT '[]'::json"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN jd_key_points SET DEFAULT '[]'::json"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN jd_topics SET NOT NULL"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN jd_key_points SET NOT NULL"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS interview_timezone VARCHAR(64)"))
         conn.execute(
             text(

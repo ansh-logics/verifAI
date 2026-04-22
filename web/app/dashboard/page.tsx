@@ -356,7 +356,7 @@ export default function DashboardPage() {
         if (formData.codeforcesUsername.trim()) {
           payload.append("codeforces_username", formData.codeforcesUsername.trim());
         }
-        data = await analyzeProfile(payload);
+        data = await analyzeProfile(payload, token);
       } else {
         const payload = new FormData();
         payload.append("branch", formData.branch);
@@ -436,7 +436,7 @@ export default function DashboardPage() {
           payload.append("codeforces_username", formData.codeforcesUsername.trim());
         }
 
-        const analyzed = await analyzeProfile(payload);
+        const analyzed = await analyzeProfile(payload, token);
         effectiveAnalysis = analyzed;
         setAnalysisResult(analyzed);
       } else if (shouldRunIncremental) {

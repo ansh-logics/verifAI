@@ -34,6 +34,95 @@ class ProfileService:
         self.auth_service = auth_service
 
     @staticmethod
+    def _normalize_handle(value: str | None) -> str | None:
+        if value is None:
+            return None
+        v = value.strip().lower()
+        return v or None
+
+    @staticmethod
+    def _extract_handle_from_blob(blob: dict[str, object] | None) -> str | None:
+        if not isinstance(blob, dict):
+            return None
+        for key in ("username", "handle", "login", "user"):
+            raw = blob.get(key)
+            if isinstance(raw, str) and raw.strip():
+                return ProfileService._normalize_handle(raw)
+        return None
+
+    @staticmethod
+    def _extract_platform_handle(payload: StudentProfileCreate, platform: str) -> str | None:
+        primary = payload.github_data if platform == "github" else payload.leetcode_data
+        candidates: list[dict[str, object]] = []
+        if isinstance(primary, dict):
+            candidates.append(primary)
+        coding_blob = payload.coding.github if platform == "github" else payload.coding.leetcode
+        if isinstance(coding_blob, dict):
+            candidates.append(coding_blob)
+        for blob in candidates:
+            found = ProfileService._extract_handle_from_blob(blob)
+            if found:
+                return found
+        return None
+
+    @staticmethod
+    def _extract_github_profile_name(payload: StudentProfileCreate) -> str | None:
+        candidates: list[dict[str, object]] = []
+        if isinstance(payload.github_data, dict):
+            candidates.append(payload.github_data)
+        if isinstance(payload.coding.github, dict):
+            candidates.append(payload.coding.github)
+        for blob in candidates:
+            for key in ("name", "full_name"):
+                raw = blob.get(key)
+                if isinstance(raw, str) and raw.strip():
+                    return raw.strip()
+        return None
+
+    @staticmethod
+    def _names_compatible(registered_name: str, external_name: str) -> bool:
+        reg_tokens = {token for token in re.findall(r"[a-z0-9]+", registered_name.lower()) if len(token) >= 2}
+        ext_tokens = {token for token in re.findall(r"[a-z0-9]+", external_name.lower()) if len(token) >= 2}
+        if not reg_tokens or not ext_tokens:
+            return True
+        return bool(reg_tokens.intersection(ext_tokens))
+
+    @staticmethod
+    def _assert_github_name_matches_registered(student: Student, payload: StudentProfileCreate) -> None:
+        github_name = ProfileService._extract_github_profile_name(payload)
+        if not github_name:
+            return
+        if not ProfileService._names_compatible(student.name, github_name):
+            raise HTTPException(
+                status_code=400,
+                detail="GitHub profile name does not match the registered account name.",
+            )
+
+    def _assert_unique_coding_handles(self, student_id: int, payload: StudentProfileCreate) -> None:
+        github_handle = self._extract_platform_handle(payload, "github")
+        leetcode_handle = self._extract_platform_handle(payload, "leetcode")
+        if not github_handle and not leetcode_handle:
+            return
+        profiles = (
+            self.db.query(StudentProfile)
+            .filter(StudentProfile.student_id != student_id)
+            .all()
+        )
+        for profile in profiles:
+            existing_github = self._extract_handle_from_blob(profile.github_data if isinstance(profile.github_data, dict) else {})
+            existing_leetcode = self._extract_handle_from_blob(profile.leetcode_data if isinstance(profile.leetcode_data, dict) else {})
+            if github_handle and existing_github and github_handle == existing_github:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This GitHub account is already linked to another student profile.",
+                )
+            if leetcode_handle and existing_leetcode and leetcode_handle == existing_leetcode:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This LeetCode account is already linked to another student profile.",
+                )
+
+    @staticmethod
     def _looks_like_email(identifier: str) -> bool:
         return "@" in identifier and "." in identifier.split("@")[-1]
 
@@ -159,6 +248,8 @@ class ProfileService:
                     detail="This account is registered. Log in to update your profile.",
                 )
             self._assert_identity_and_anomalies(student, payload)
+            self._assert_github_name_matches_registered(student, payload)
+            self._assert_unique_coding_handles(student.id, payload)
             student.name = payload.student.name
             student.phone = payload.student.phone
             student.branch = payload.student.branch
@@ -309,6 +400,8 @@ class ProfileService:
         pay_or_stipend: str | None,
         duration: str | None,
         bond_details: str | None,
+        jd_topics: list[str],
+        jd_key_points: list[str],
         interview_timezone: str | None,
         student_ids: list[int],
         created_by: str,
@@ -331,6 +424,8 @@ class ProfileService:
             pay_or_stipend=(pay_or_stipend or "").strip() or None,
             duration=(duration or "").strip() or None,
             bond_details=(bond_details or "").strip() or None,
+            jd_topics=[topic.strip() for topic in jd_topics if isinstance(topic, str) and topic.strip()],
+            jd_key_points=[point.strip() for point in jd_key_points if isinstance(point, str) and point.strip()],
             interview_timezone=(interview_timezone or "").strip() or None,
             created_by=created_by,
         )
