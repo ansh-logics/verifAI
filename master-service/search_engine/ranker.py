@@ -33,6 +33,7 @@ class ResultRanker:
         self,
         skill_weight: float = 2.0,
         name_weight: float = 1.5,
+        identity_weight: float = 5.0,
         project_weight: float = 1.0,
         github_weight: float = 0.8,
         score_boost_factor: float = 0.1,
@@ -43,12 +44,14 @@ class ResultRanker:
         Args:
             skill_weight: Weight for matches in skills field
             name_weight: Weight for matches in name field
+            identity_weight: Weight for exact identity matches (email, usernames)
             project_weight: Weight for matches in projects
             github_weight: Weight for matches in github
             score_boost_factor: Factor to boost by overall_score
         """
         self.skill_weight = skill_weight
         self.name_weight = name_weight
+        self.identity_weight = identity_weight
         self.project_weight = project_weight
         self.github_weight = github_weight
         self.score_boost_factor = score_boost_factor
@@ -71,45 +74,63 @@ class ResultRanker:
             return 0.0
 
         score = 0.0
+        query_str = " ".join(query_tokens).lower()
 
         # Separate exact and fuzzy matches
         exact_matches = [t for t in matched_terms if not t.startswith("~")]
         fuzzy_matches = [t[1:] for t in matched_terms if t.startswith("~")]
 
-        # Bonus for number of distinct query terms matched
-        unique_query_matched = sum(1 for qt in query_tokens if any(qt.lower() in str(em) for em in exact_matches))
-        score += unique_query_matched * 5
+        # 1. PRIMARY IDENTITY BOOST (Email, GitHub, LeetCode, Full Name)
+        doc_email = doc.email.lower()
+        doc_github = doc.github_username.lower()
+        doc_leetcode = doc.leetcode_username.lower()
+        doc_name = doc.name.lower()
 
-        # Pre-process strings once to save CPU cycles
-        doc_name_lower = doc.name.lower()
+        # Check for full query exact matches against identity fields
+        if query_str == doc_email:
+            score += 100.0  # Perfect match for email
+        elif query_str == doc_github or query_str == doc_leetcode:
+            score += 95.0   # Extremely high for username match
+        elif query_str == doc_name:
+            score += 90.0   # High for exact full name
 
-        # Field-specific scoring
-        for token in exact_matches:
-            token_lower = token.lower()
-            
-            # Check if in skills (skills are pre-lowered in indexer)
-            if any(token_lower in skill for skill in doc.skills):
-                score += self.skill_weight * 10
+        # 2. TOKEN-BASED SCORING
+        if score < 100:
+            # Bonus for number of distinct query terms matched
+            unique_query_matched = sum(1 for qt in query_tokens if any(qt.lower() in str(em).lower() for em in exact_matches))
+            score += unique_query_matched * 5
 
-            # Check if in name
-            if token_lower in doc_name_lower:
-                score += self.name_weight * 10
+            # Field-specific scoring for each token
+            for token in exact_matches:
+                token_lower = token.lower()
+                
+                # Identity token match (partial email or username match)
+                if token_lower == doc_email or token_lower == doc_github or token_lower == doc_leetcode:
+                    score += self.identity_weight * 10
+                
+                # Name token match
+                if token_lower in doc_name:
+                    score += self.name_weight * 10
 
-            # Check if in github languages (pre-lowered)
-            if any(token_lower in lang for lang in doc.github_languages):
-                score += self.github_weight * 7
+                # Skills match (skills are pre-lowered in indexer)
+                if any(token_lower in skill for skill in doc.skills):
+                    score += self.skill_weight * 10
 
-            # Check if in projects (pre-lowered)
-            if any(token_lower in proj for proj in doc.projects):
-                score += self.project_weight * 6
+                # GitHub languages match
+                if any(token_lower in lang for lang in doc.github_languages):
+                    score += self.github_weight * 7
 
-        # Fuzzy match penalty (reduced weight)
-        for token in fuzzy_matches:
-            score += 2  # Small bonus for fuzzy matches
+                # Projects match
+                if any(token_lower in proj for proj in doc.projects):
+                    score += self.project_weight * 6
 
-        # Boost by overall candidate score
+            # Fuzzy match penalty
+            for token in fuzzy_matches:
+                score += 2  # Small bonus for fuzzy matches
+
+        # 3. OVERALL SCORE BOOST
         if doc.overall_score > 0:
-            score_boost = (doc.overall_score / 100.0) * self.score_boost_factor * 100
+            score_boost = (doc.overall_score / 100.0) * self.score_boost_factor * 10
             score += score_boost
 
         return min(score, 100.0)  # Cap at 100

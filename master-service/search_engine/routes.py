@@ -86,6 +86,7 @@ def _ensure_indexed(service: SearchService, db: Session) -> None:
                     {
                         "skills": profile.skills or [],
                         "github_data": profile.github_data or {},
+                        "leetcode_data": profile.leetcode_data or {},
                         "resume_data": profile.resume_data or {},
                         "coding_score": profile.coding_score or 0.0,
                         "overall_score": profile.overall_score or 0.0,
@@ -96,6 +97,7 @@ def _ensure_indexed(service: SearchService, db: Session) -> None:
                     {
                         "skills": [],
                         "github_data": {},
+                        "leetcode_data": {},
                         "resume_data": {},
                         "coding_score": 0.0,
                         "overall_score": 0.0,
