@@ -256,6 +256,7 @@ class TpoGroupCreateRequest(BaseModel):
     jd_topics: list[str] = Field(default_factory=list)
     jd_key_points: list[str] = Field(default_factory=list)
     interview_timezone: str | None = Field(default=None, max_length=64)
+    total_rounds: int = Field(default=1, ge=1, le=10)
 
 
 class TpoGroupMemberInfo(BaseModel):
@@ -265,6 +266,47 @@ class TpoGroupMemberInfo(BaseModel):
     roll_no: str | None = None
     branch: str
     placement: PlacementInfo | None = None
+
+
+class TpoRoundMemberStatus(BaseModel):
+    student_id: int
+    status: Literal["pending", "qualified", "rejected"]
+
+
+class TpoRoundMemberDecisionRequest(BaseModel):
+    status: Literal["pending", "qualified", "rejected"]
+
+
+class TpoRoundFinalizeRequest(BaseModel):
+    initial_round_note: str | None = Field(default=None, max_length=1000)
+    shortlisted_note: str | None = Field(default=None, max_length=1000)
+    rejection_note: str | None = Field(default=None, max_length=1000)
+    interview_date: str | None = None
+    interview_time_start: str | None = None
+    interview_time_end: str | None = None
+    send_emails: bool = False
+
+
+class TpoRoundMailPreviewResponse(BaseModel):
+    group_id: int
+    round_no: int
+    is_final_round: bool
+    qualified_student_ids: list[int] = Field(default_factory=list)
+    rejected_student_ids: list[int] = Field(default_factory=list)
+    qualified_count: int = 0
+    rejected_count: int = 0
+    next_round_no: int | None = None
+    can_mark_placed: bool = False
+
+
+class TpoRoundStateResponse(BaseModel):
+    group_id: int
+    round_no: int
+    total_rounds: int
+    status: Literal["in_progress", "finalized"]
+    is_final_round: bool
+    can_mark_placed: bool
+    members: list[TpoRoundMemberStatus] = Field(default_factory=list)
 
 
 class TpoGroupResponse(BaseModel):
@@ -281,6 +323,12 @@ class TpoGroupResponse(BaseModel):
     jd_topics: list[str] = Field(default_factory=list)
     jd_key_points: list[str] = Field(default_factory=list)
     interview_timezone: str | None = None
+    total_rounds: int = 1
+    current_round_no: int = 1
+    round_state: Literal["in_progress", "finalized"] = "in_progress"
+    is_final_round: bool = False
+    can_mark_placed: bool = False
+    round_members: list[TpoRoundMemberStatus] = Field(default_factory=list)
     members: list[TpoGroupMemberInfo] = Field(default_factory=list)
 
 
@@ -296,6 +344,8 @@ class TpoMailActionRequest(BaseModel):
     interview_time_start: str | None = None
     interview_time_end: str | None = None
     additional_note: str | None = Field(default=None, max_length=1000)
+    round_no: int | None = Field(default=None, ge=1)
+    outcome: Literal["qualified", "rejected", "all"] | None = None
 
     @field_validator("mode")
     @classmethod
@@ -309,7 +359,14 @@ class TpoMailActionRequest(BaseModel):
     @classmethod
     def normalize_mail_type(cls, value: str) -> str:
         v = value.strip().lower()
-        allowed = {"shortlist_notice", "prep_topics", "interview_schedule", "process_custom"}
+        allowed = {
+            "shortlist_notice",
+            "prep_topics",
+            "interview_schedule",
+            "process_custom",
+            "round_invite",
+            "round_result",
+        }
         if v not in allowed:
             raise ValueError("mail_type is invalid")
         return v

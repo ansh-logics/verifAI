@@ -120,6 +120,9 @@ class TpoAnalysisGroup(Base):
     jd_topics: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     jd_key_points: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     interview_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    total_rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    current_round_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    round_state: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
     created_by: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
@@ -128,6 +131,10 @@ class TpoAnalysisGroup(Base):
         cascade="all, delete-orphan",
     )
     mail_jobs: Mapped[list["TpoMailJob"]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+    rounds: Mapped[list["TpoGroupRound"]] = relationship(
         back_populates="group",
         cascade="all, delete-orphan",
     )
@@ -175,6 +182,8 @@ class TpoMailJob(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey("tpo_analysis_groups.id", ondelete="CASCADE"), nullable=False, index=True)
     requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
     mail_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    round_no: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
     total_recipients: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     processed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -187,4 +196,44 @@ class TpoMailJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     group: Mapped[TpoAnalysisGroup] = relationship(back_populates="mail_jobs")
+
+
+class TpoGroupRound(Base):
+    __tablename__ = "tpo_group_rounds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("tpo_analysis_groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    round_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    group: Mapped[TpoAnalysisGroup] = relationship(back_populates="rounds")
+    members: Mapped[list["TpoGroupRoundMember"]] = relationship(
+        back_populates="round",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ux_tpo_group_round_unique", "group_id", "round_no", unique=True),
+    )
+
+
+class TpoGroupRoundMember(Base):
+    __tablename__ = "tpo_group_round_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    round_id: Mapped[int] = mapped_column(ForeignKey("tpo_group_rounds.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    round: Mapped[TpoGroupRound] = relationship(back_populates="members")
+    student: Mapped[Student] = relationship()
+
+    __table_args__ = (
+        Index("ux_tpo_group_round_member_unique", "round_id", "student_id", unique=True),
+    )
 

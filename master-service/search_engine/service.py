@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import re
 from typing import Any
 
 from search_engine.indexer import InvertedIndex, create_candidate_document
@@ -77,6 +78,7 @@ class SearchService:
                         student_data={
                             "name": candidate.get("name", ""),
                             "email": candidate.get("email", ""),
+                            "phone": candidate.get("phone", ""),
                             "branch": candidate.get("branch", ""),
                             "cgpa": candidate.get("cgpa"),
                         },
@@ -121,6 +123,13 @@ class SearchService:
         try:
             # Tokenize and normalize query
             query_tokens = tokenize(query.q)
+            digits = re.sub(r"\D", "", query.q or "")
+            if digits:
+                query_tokens.append(digits)
+                if digits.startswith("91") and len(digits) >= 12:
+                    query_tokens.append(digits[-10:])
+                elif len(digits) == 10:
+                    query_tokens.append(f"91{digits}")
             if not query_tokens:
                 return SearchResult(query=query.q, total_results=0, results=[])
 

@@ -9,13 +9,23 @@ import { toast } from "sonner";
 
 import { clearTpoAuth } from "@/lib/auth-storage";
 import {
+  finalizeTpoRound,
   getTpoMailJobProgress,
+  getTpoCurrentRound,
   getApiErrorMessage,
   listTpoGroups,
   markStudentPlacement,
+  previewTpoRoundMails,
   triggerTpoMailAction,
+  updateTpoRoundMemberStatus,
 } from "@/lib/api";
-import type { TpoGroup, TpoMailJobProgressResponse, TpoMailType } from "@/lib/types";
+import type {
+  TpoGroup,
+  TpoMailJobProgressResponse,
+  TpoMailType,
+  TpoRoundMailPreviewResponse,
+  TpoRoundState,
+} from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -32,6 +42,10 @@ export default function PlacementGroupDetailPage() {
   const [bulkMailJob, setBulkMailJob] = useState<TpoMailJobProgressResponse | null>(null);
   const [bulkPolling, setBulkPolling] = useState(false);
   const [placingStudentId, setPlacingStudentId] = useState<number | null>(null);
+  const [updatingRoundStudentId, setUpdatingRoundStudentId] = useState<number | null>(null);
+  const [finalizingRound, setFinalizingRound] = useState(false);
+  const [roundState, setRoundState] = useState<TpoRoundState | null>(null);
+  const [roundPreview, setRoundPreview] = useState<TpoRoundMailPreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mailType, setMailType] = useState<TpoMailType>("shortlist_notice");
   const [customSubject, setCustomSubject] = useState("");
@@ -51,6 +65,20 @@ export default function PlacementGroupDetailPage() {
     if (bulkMailJob.status === "completed") return "Completed";
     return bulkMailJob.failure_count > 0 ? "Completed with failures" : "Failed";
   }, [bulkMailJob]);
+  const roundStatusMap = useMemo(() => {
+    const map = new Map<number, "pending" | "qualified" | "rejected">();
+    if (!roundState) return map;
+    for (const item of roundState.members) {
+      map.set(item.student_id, item.status);
+    }
+    return map;
+  }, [roundState]);
+  const visibleMembers = useMemo(() => {
+    if (!group) return [];
+    if (!roundState) return group.members;
+    const activeIds = new Set(roundState.members.map((m) => m.student_id));
+    return group.members.filter((member) => activeIds.has(member.student_id));
+  }, [group, roundState]);
 
   useEffect(() => {
     let mounted = true;
@@ -69,6 +97,11 @@ export default function PlacementGroupDetailPage() {
           return;
         }
         setGroup(selected);
+        return getTpoCurrentRound(selected.id);
+      })
+      .then((round) => {
+        if (!mounted || !round) return;
+        setRoundState(round);
       })
       .catch((err) => {
         if (!mounted) return;
@@ -110,6 +143,8 @@ export default function PlacementGroupDetailPage() {
         group_id: group.id,
         mode: "bulk",
         mail_type: mailType,
+        round_no: roundState?.round_no,
+        outcome: mailType === "round_result" ? "all" : undefined,
         subject: customSubject || undefined,
         body: customBody || undefined,
         additional_note: additionalNote || undefined,
@@ -158,6 +193,7 @@ export default function PlacementGroupDetailPage() {
         mode: "individual",
         mail_type: mailType,
         student_id: studentId,
+        round_no: roundState?.round_no,
         subject: customSubject || undefined,
         body: customBody || undefined,
         additional_note: additionalNote || undefined,
@@ -174,6 +210,45 @@ export default function PlacementGroupDetailPage() {
       toast.error(getApiErrorMessage(err));
     } finally {
       setMailing(false);
+    }
+  };
+
+  const updateRoundStatus = async (studentId: number, status: "pending" | "qualified" | "rejected") => {
+    if (!group || !roundState) return;
+    setUpdatingRoundStudentId(studentId);
+    try {
+      const updated = await updateTpoRoundMemberStatus(group.id, roundState.round_no, studentId, status);
+      setRoundState(updated);
+      const preview = await previewTpoRoundMails(group.id, roundState.round_no);
+      setRoundPreview(preview);
+      toast.success("Round status updated.");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setUpdatingRoundStudentId(null);
+    }
+  };
+
+  const finalizeCurrentRound = async () => {
+    if (!group || !roundState) return;
+    setFinalizingRound(true);
+    try {
+      const finalized = await finalizeTpoRound(group.id, roundState.round_no, {
+        send_emails: false,
+      });
+      setRoundPreview(finalized);
+      const refreshedGroups = await listTpoGroups();
+      const selected = refreshedGroups.find((item) => item.id === group.id) || null;
+      setGroup(selected);
+      if (selected) {
+        const refreshedRound = await getTpoCurrentRound(selected.id);
+        setRoundState(refreshedRound);
+      }
+      toast.success("Round finalized.");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setFinalizingRound(false);
     }
   };
 
@@ -356,6 +431,8 @@ export default function PlacementGroupDetailPage() {
                 <option value="shortlist_notice">Shortlist notice</option>
                 <option value="prep_topics">Preparation topics</option>
                 <option value="interview_schedule">Interview schedule</option>
+                <option value="round_invite">Round invite</option>
+                <option value="round_result">Round result (qualified/rejected)</option>
                 <option value="process_custom">Custom process mail</option>
               </select>
               <Input
@@ -414,9 +491,49 @@ export default function PlacementGroupDetailPage() {
           </CardContent>
         </Card>
 
+        {roundState ? (
+          <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
+            <CardHeader>
+              <CardTitle>
+                Round {roundState.round_no} of {roundState.total_rounds}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-700">
+              <p>
+                Status: <span className="font-medium">{roundState.status}</span>
+              </p>
+              {roundPreview ? (
+                <p>
+                  Qualified: <span className="font-medium">{roundPreview.qualified_count}</span> · Rejected:{" "}
+                  <span className="font-medium">{roundPreview.rejected_count}</span>
+                </p>
+              ) : null}
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => void finalizeCurrentRound()}
+                  disabled={finalizingRound || roundState.status === "finalized"}
+                  className="h-9 rounded-full px-4 bg-slate-900 hover:bg-slate-800 text-white"
+                >
+                  {finalizingRound ? "Finalizing..." : "Finalize round"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    void sendBulkMail()
+                  }
+                  disabled={mailing || bulkPolling}
+                  className="h-9 rounded-full px-4 border-slate-200 text-slate-700 hover:bg-slate-50"
+                >
+                  Send selected mail
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
           <CardHeader>
-            <CardTitle>Group Members ({group.members.length})</CardTitle>
+            <CardTitle>Group Members ({visibleMembers.length})</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -426,42 +543,68 @@ export default function PlacementGroupDetailPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Roll</TableHead>
                   <TableHead>Branch</TableHead>
+                  <TableHead>Round Status</TableHead>
                   <TableHead>Placement</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {group.members.map((member) => (
+                {visibleMembers.map((member) => (
                   <TableRow key={member.student_id}>
                     <TableCell className="font-medium">{member.name}</TableCell>
                     <TableCell>{member.email}</TableCell>
                     <TableCell>{member.roll_no || "—"}</TableCell>
                     <TableCell>{member.branch}</TableCell>
+                    <TableCell>{roundStatusMap.get(member.student_id) || "—"}</TableCell>
                     <TableCell>
                       {member.placement?.is_active
                         ? `${member.placement.offer_type} @ ${member.placement.company_name}`
                         : "Not placed"}
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void sendIndividualMail(member.student_id)}
-                        disabled={mailing || bulkPolling}
-                        className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
-                      >
-                        Mail
-                      </Button>
-                      {!member.placement?.is_active ? (
+                    <TableCell className="min-w-[240px] align-top">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <Button
                           size="sm"
-                          onClick={() => void markPlaced(member.student_id)}
-                          disabled={placingStudentId === member.student_id}
-                          className="h-8 rounded-full px-3 bg-blue-600 hover:bg-blue-700 text-white"
+                          variant="outline"
+                          onClick={() => void sendIndividualMail(member.student_id)}
+                          disabled={mailing || bulkPolling}
+                          className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
                         >
-                          Mark placed
+                          Mail
                         </Button>
-                      ) : null}
+                        {roundState?.status === "in_progress" ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void updateRoundStatus(member.student_id, "qualified")}
+                              disabled={updatingRoundStudentId === member.student_id}
+                              className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
+                            >
+                              Qualify
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void updateRoundStatus(member.student_id, "rejected")}
+                              disabled={updatingRoundStudentId === member.student_id}
+                              className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        ) : null}
+                        {roundState?.can_mark_placed && !member.placement?.is_active && roundStatusMap.get(member.student_id) !== "rejected" ? (
+                          <Button
+                            size="sm"
+                            onClick={() => void markPlaced(member.student_id)}
+                            disabled={placingStudentId === member.student_id}
+                            className="h-8 rounded-full px-3 bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Mark placed
+                          </Button>
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

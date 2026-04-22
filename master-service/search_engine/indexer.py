@@ -7,6 +7,7 @@ Builds inverted index and document store from database.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any
 
 from search_engine.utils import tokenize, normalize_token
@@ -128,6 +129,17 @@ def build_searchable_text(candidate_data: dict[str, Any]) -> str:
     # Branch
     if branch := candidate_data.get("branch"):
         parts.append(str(branch).lower())
+
+    # Phone (normalize to digits so +91 / hyphen formatting does not affect matching)
+    if phone := candidate_data.get("phone"):
+        phone_text = str(phone).strip()
+        if phone_text:
+            digits = re.sub(r"\D", "", phone_text)
+            if digits:
+                parts.append(digits)
+                # Add local 10-digit variant for Indian numbers (+91XXXXXXXXXX)
+                if digits.startswith("91") and len(digits) >= 12:
+                    parts.append(digits[-10:])
 
     # Combine all
     return " ".join(parts)

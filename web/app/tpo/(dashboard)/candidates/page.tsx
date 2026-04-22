@@ -203,6 +203,7 @@ export default function TpoDashboardPage() {
   const [composerInputHeight, setComposerInputHeight] = useState(48);
   const [groups, setGroups] = useState<TpoGroup[]>([]);
   const [groupTitle, setGroupTitle] = useState("");
+  const [groupRounds, setGroupRounds] = useState("3");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [placingStudentId, setPlacingStudentId] = useState<number | null>(null);
   const [lastCreatedGroupId, setLastCreatedGroupId] = useState<number | null>(null);
@@ -391,6 +392,8 @@ export default function TpoDashboardPage() {
 
   async function handleCreateGroup(): Promise<boolean> {
     const title = groupTitle.trim() || `Analysis group ${new Date().toLocaleDateString()}`;
+    const parsedRounds = Number.parseInt(groupRounds.trim(), 10);
+    const totalRounds = Number.isFinite(parsedRounds) && parsedRounds > 0 ? Math.min(parsedRounds, 10) : 1;
     const studentIds = Array.from(new Set([...filtered.map((c) => c.id), ...Object.keys(manualSelected).map(Number)]));
     if (studentIds.length === 0) {
       toast.error("No shortlisted candidates to create group.");
@@ -417,10 +420,12 @@ export default function TpoDashboardPage() {
         ],
         jd_key_points: parsedJD?.responsibilities ?? [],
         interview_timezone: "Asia/Kolkata",
+        total_rounds: totalRounds,
       });
       setGroups((prev) => [created, ...prev]);
       setLastCreatedGroupId(created.id);
       setGroupTitle("");
+      setGroupRounds("3");
       setManualSelected({});
       setQuery("");
       setSearchResults(null);
@@ -992,6 +997,17 @@ export default function TpoDashboardPage() {
                         value={groupTitle}
                         onChange={(e) => setGroupTitle(e.target.value)}
                         placeholder="Group title (optional)"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Total rounds</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={groupRounds}
+                        onChange={(e) => setGroupRounds(e.target.value)}
+                        placeholder="Number of interview rounds"
                       />
                     </div>
                     <div className="rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-700 space-y-1">

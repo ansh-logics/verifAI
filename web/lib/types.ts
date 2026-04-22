@@ -165,6 +165,35 @@ export interface TpoGroupMember {
   placement?: StudentProfileDetail["placement"];
 }
 
+export type TpoRoundMemberStatusValue = "pending" | "qualified" | "rejected";
+
+export interface TpoRoundMemberStatus {
+  student_id: number;
+  status: TpoRoundMemberStatusValue;
+}
+
+export interface TpoRoundState {
+  group_id: number;
+  round_no: number;
+  total_rounds: number;
+  status: "in_progress" | "finalized";
+  is_final_round: boolean;
+  can_mark_placed: boolean;
+  members: TpoRoundMemberStatus[];
+}
+
+export interface TpoRoundMailPreviewResponse {
+  group_id: number;
+  round_no: number;
+  is_final_round: boolean;
+  qualified_student_ids: number[];
+  rejected_student_ids: number[];
+  qualified_count: number;
+  rejected_count: number;
+  next_round_no?: number | null;
+  can_mark_placed: boolean;
+}
+
 export interface TpoGroup {
   id: number;
   title: string;
@@ -179,6 +208,12 @@ export interface TpoGroup {
   jd_topics: string[];
   jd_key_points: string[];
   interview_timezone: string | null;
+  total_rounds: number;
+  current_round_no: number;
+  round_state: "in_progress" | "finalized";
+  is_final_round: boolean;
+  can_mark_placed: boolean;
+  round_members: TpoRoundMemberStatus[];
   members: TpoGroupMember[];
 }
 
@@ -194,6 +229,7 @@ export interface TpoCreateGroupRequest {
   jd_topics?: string[];
   jd_key_points?: string[];
   interview_timezone?: string | null;
+  total_rounds?: number;
 }
 
 export interface TpoPlacementRequest {
@@ -209,7 +245,9 @@ export type TpoMailType =
   | "shortlist_notice"
   | "prep_topics"
   | "interview_schedule"
-  | "process_custom";
+  | "process_custom"
+  | "round_invite"
+  | "round_result";
 
 export interface TpoMailActionRequest {
   group_id: number;
@@ -223,6 +261,18 @@ export interface TpoMailActionRequest {
   interview_time_start?: string;
   interview_time_end?: string;
   additional_note?: string;
+  round_no?: number;
+  outcome?: "qualified" | "rejected" | "all";
+}
+
+export interface TpoRoundFinalizeRequest {
+  initial_round_note?: string;
+  shortlisted_note?: string;
+  rejection_note?: string;
+  interview_date?: string;
+  interview_time_start?: string;
+  interview_time_end?: string;
+  send_emails?: boolean;
 }
 
 export interface TpoMailActionResponse {

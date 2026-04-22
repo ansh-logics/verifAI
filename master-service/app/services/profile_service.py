@@ -7,7 +7,16 @@ from datetime import UTC, datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.database.models import PlacementRecord, RawUpload, Student, StudentProfile, TpoAnalysisGroup, TpoAnalysisGroupMember
+from app.database.models import (
+    PlacementRecord,
+    RawUpload,
+    Student,
+    StudentProfile,
+    TpoAnalysisGroup,
+    TpoAnalysisGroupMember,
+    TpoGroupRound,
+    TpoGroupRoundMember,
+)
 from app.schemas.student import (
     AcademicsData,
     AuthTokenResponse,
@@ -26,6 +35,7 @@ from app.services.master_service import normalize_skills
 logger = logging.getLogger(__name__)
 PHONE_REGEX = re.compile(r"^[0-9+\-\s()]{7,20}$")
 ROLL_REGEX = re.compile(r"^[A-Z0-9][A-Z0-9\-_/]{2,63}$")
+ROUND_MEMBER_STATUSES = {"pending", "qualified", "rejected"}
 
 
 class ProfileService:
@@ -181,13 +191,37 @@ class ProfileService:
         return out
 
     @staticmethod
+    def _normalize_phone(value: str | None) -> str:
+        if not value:
+            return ""
+        digits = re.sub(r"\D", "", value)
+        if not digits:
+            return ""
+        if digits.startswith("91") and len(digits) >= 12:
+            return digits[-10:]
+        return digits[-10:] if len(digits) > 10 else digits
+
+    @staticmethod
+    def _normalize_offer_type(value: str | None) -> str | None:
+        if value is None:
+            return None
+        v = value.strip().lower()
+        if not v:
+            return None
+        if v in {"internship", "intern", "summer intern", "winter intern"}:
+            return "internship"
+        if v in {"job", "full-time", "full time", "fte", "placement"}:
+            return "job"
+        return None
+
+    @staticmethod
     def _assert_identity_and_anomalies(student: Student, payload: StudentProfileCreate) -> None:
         submitted = payload.student
         if submitted.email.strip().lower() != student.email.strip().lower():
             raise HTTPException(status_code=400, detail="Email mismatch with registered account.")
         if submitted.name.strip().lower() != student.name.strip().lower():
             raise HTTPException(status_code=400, detail="Name mismatch with registered account.")
-        if submitted.phone.strip() != student.phone.strip():
+        if ProfileService._normalize_phone(submitted.phone) != ProfileService._normalize_phone(student.phone):
             raise HTTPException(status_code=400, detail="Phone mismatch with registered account.")
         if not submitted.roll_no:
             raise HTTPException(status_code=400, detail="roll_no is required before saving profile.")
@@ -198,11 +232,16 @@ class ProfileService:
         if submitted.cgpa is not None and (submitted.cgpa < 0 or submitted.cgpa > 10):
             raise HTTPException(status_code=400, detail="CGPA must be between 0 and 10.")
         extracted = ProfileService._extract_identity_candidates(payload)
-        if extracted.get("name") and extracted["name"].strip().lower() != student.name.strip().lower():
-            raise HTTPException(status_code=400, detail="Resume/marksheet name does not match registered name.")
-        if extracted.get("email") and extracted["email"].strip().lower() != student.email.strip().lower():
-            raise HTTPException(status_code=400, detail="Resume/marksheet email does not match registered email.")
-        if extracted.get("phone") and extracted["phone"].strip() != student.phone.strip():
+        extracted_name = extracted.get("name", "").strip().lower()
+        extracted_email = extracted.get("email", "").strip().lower()
+        name_mismatch = bool(extracted_name and extracted_name != student.name.strip().lower())
+        email_mismatch = bool(extracted_email and extracted_email != student.email.strip().lower())
+        if name_mismatch and email_mismatch:
+            raise HTTPException(
+                status_code=400,
+                detail="Resume/marksheet identity mismatch: both name and email differ from registered account.",
+            )
+        if extracted.get("phone") and ProfileService._normalize_phone(extracted["phone"]) != ProfileService._normalize_phone(student.phone):
             raise HTTPException(status_code=400, detail="Resume/marksheet phone does not match registered phone.")
         if extracted.get("roll_no") and submitted.roll_no and extracted["roll_no"].strip().upper() != submitted.roll_no.strip().upper():
             raise HTTPException(status_code=400, detail="Resume/marksheet roll number does not match provided roll number.")
@@ -390,6 +429,100 @@ class ProfileService:
             else None,
         )
 
+    def _get_round(self, group_id: int, round_no: int) -> TpoGroupRound:
+        round_row = (
+            self.db.query(TpoGroupRound)
+            .filter(TpoGroupRound.group_id == group_id, TpoGroupRound.round_no == round_no)
+            .one_or_none()
+        )
+        if round_row is None:
+            raise HTTPException(status_code=404, detail="Round not found.")
+        return round_row
+
+    def get_current_round(self, group_id: int) -> TpoGroupRound:
+        group = self.db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
+        if group is None:
+            raise HTTPException(status_code=404, detail="Group not found.")
+        return self._get_round(group.id, group.current_round_no)
+
+    def update_round_member_status(self, *, group_id: int, round_no: int, student_id: int, status: str) -> TpoGroupRound:
+        next_status = status.strip().lower()
+        if next_status not in ROUND_MEMBER_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid round member status.")
+        group = self.db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
+        if group is None:
+            raise HTTPException(status_code=404, detail="Group not found.")
+        if round_no != group.current_round_no:
+            raise HTTPException(status_code=400, detail="Only current active round can be updated.")
+        if group.round_state != "in_progress":
+            raise HTTPException(status_code=400, detail="Round is already finalized.")
+        round_row = self._get_round(group_id, round_no)
+        member = (
+            self.db.query(TpoGroupRoundMember)
+            .filter(TpoGroupRoundMember.round_id == round_row.id, TpoGroupRoundMember.student_id == student_id)
+            .one_or_none()
+        )
+        if member is None:
+            raise HTTPException(status_code=404, detail="Student is not part of this round.")
+        member.status = next_status
+        member.updated_at = datetime.now(UTC)
+        self.db.add(member)
+        self.db.commit()
+        self.db.refresh(round_row)
+        return round_row
+
+    def finalize_round(self, *, group_id: int, round_no: int) -> tuple[TpoAnalysisGroup, TpoGroupRound]:
+        group = self.db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
+        if group is None:
+            raise HTTPException(status_code=404, detail="Group not found.")
+        if round_no != group.current_round_no:
+            raise HTTPException(status_code=400, detail="Only current active round can be finalized.")
+        if group.round_state != "in_progress":
+            raise HTTPException(status_code=400, detail="Round already finalized.")
+        round_row = self._get_round(group.id, round_no)
+        members = self.db.query(TpoGroupRoundMember).filter(TpoGroupRoundMember.round_id == round_row.id).all()
+        if not members:
+            raise HTTPException(status_code=400, detail="Current round has no students.")
+        unresolved = [item.student_id for item in members if item.status == "pending"]
+        if unresolved:
+            raise HTTPException(status_code=400, detail="All students must be marked qualified or rejected before finalizing.")
+
+        round_row.status = "finalized"
+        round_row.finalized_at = datetime.now(UTC)
+        round_row.updated_at = datetime.now(UTC)
+        self.db.add(round_row)
+
+        if round_no >= group.total_rounds:
+            group.round_state = "finalized"
+            self.db.add(group)
+            self.db.commit()
+            self.db.refresh(group)
+            self.db.refresh(round_row)
+            return group, round_row
+
+        qualified_ids = [item.student_id for item in members if item.status == "qualified"]
+        if not qualified_ids:
+            group.round_state = "finalized"
+            self.db.add(group)
+            self.db.commit()
+            self.db.refresh(group)
+            self.db.refresh(round_row)
+            return group, round_row
+
+        next_round_no = round_no + 1
+        next_round = TpoGroupRound(group_id=group.id, round_no=next_round_no, status="in_progress")
+        self.db.add(next_round)
+        self.db.flush()
+        for sid in qualified_ids:
+            self.db.add(TpoGroupRoundMember(round_id=next_round.id, student_id=sid, status="pending"))
+        group.current_round_no = next_round_no
+        group.round_state = "in_progress"
+        self.db.add(group)
+        self.db.commit()
+        self.db.refresh(group)
+        self.db.refresh(round_row)
+        return group, round_row
+
     def create_tpo_analysis_group(
         self,
         *,
@@ -403,6 +536,7 @@ class ProfileService:
         jd_topics: list[str],
         jd_key_points: list[str],
         interview_timezone: str | None,
+        total_rounds: int,
         student_ids: list[int],
         created_by: str,
     ) -> TpoAnalysisGroup:
@@ -427,6 +561,9 @@ class ProfileService:
             jd_topics=[topic.strip() for topic in jd_topics if isinstance(topic, str) and topic.strip()],
             jd_key_points=[point.strip() for point in jd_key_points if isinstance(point, str) and point.strip()],
             interview_timezone=(interview_timezone or "").strip() or None,
+            total_rounds=max(1, int(total_rounds)),
+            current_round_no=1,
+            round_state="in_progress",
             created_by=created_by,
         )
         self.db.add(group)
@@ -435,6 +572,11 @@ class ProfileService:
         for sid in deduped_ids:
             member = TpoAnalysisGroupMember(group_id=group.id, student_id=sid)
             self.db.add(member)
+        first_round = TpoGroupRound(group_id=group.id, round_no=1, status="in_progress")
+        self.db.add(first_round)
+        self.db.flush()
+        for sid in deduped_ids:
+            self.db.add(TpoGroupRoundMember(round_id=first_round.id, student_id=sid, status="pending"))
         self.db.commit()
         self.db.refresh(group)
         return group
@@ -472,15 +614,28 @@ class ProfileService:
             group = self.db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
             if group is None:
                 raise HTTPException(status_code=404, detail="Group not found.")
+            if group.current_round_no != group.total_rounds:
+                raise HTTPException(status_code=400, detail="Mark placed is only allowed in the final round.")
+            current_round = self._get_round(group.id, group.current_round_no)
+            current_member = (
+                self.db.query(TpoGroupRoundMember)
+                .filter(TpoGroupRoundMember.round_id == current_round.id, TpoGroupRoundMember.student_id == student_id)
+                .one_or_none()
+            )
+            if current_member is None or current_member.status == "rejected":
+                raise HTTPException(status_code=400, detail="Student is not eligible for placement in this round.")
             group_company_name = (group.company_name or "").strip() or None
-            group_role_type = (group.role_type or "").strip().lower() or None
+            group_role_type = self._normalize_offer_type(group.role_type)
             if group_company_name is None:
                 raise HTTPException(status_code=400, detail="Group company is missing. Recreate group with company context.")
 
         resolved_company = group_company_name or ((company_name or "").strip() or None)
         if resolved_company is None:
             raise HTTPException(status_code=400, detail="company_name is required.")
-        resolved_offer_type = group_role_type or ((offer_type or "").strip().lower() or None)
+        resolved_offer_type = group_role_type or self._normalize_offer_type(offer_type)
+        if resolved_offer_type is None and group_id is not None:
+            # Final-round placement actions default to job when JD role labels are free-form.
+            resolved_offer_type = "job"
         if resolved_offer_type not in {"internship", "job"}:
             raise HTTPException(status_code=400, detail="offer_type must be internship or job.")
 

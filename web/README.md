@@ -23,6 +23,16 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - After login, a TPO session token is stored and `/tpo/*` routes are guarded.
 - If the token expires or is invalid, users are redirected back to `/tpo/login`.
 
+## Placement rounds flow
+
+- Create a placement group from TPO candidates with configurable `total rounds`.
+- Group detail page now includes:
+  - current round state (`Round x of n`)
+  - per-student round status actions (`Qualify` / `Reject`)
+  - round finalize action (auto progression to next round on backend)
+  - round-aware mail options (`round_invite`, `round_result`)
+- `Mark placed` is shown only when the group is in the final round.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

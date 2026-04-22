@@ -166,3 +166,18 @@ Response includes:
 - Login using `POST /student/tpo/login` to receive a bearer token.
 - `/student/match-jd` and `/search/*` accept `Authorization: Bearer <tpo_token>`.
 - API key fallback remains available only when `TPO_ALLOW_API_KEY_FALLBACK=true`.
+
+## Placement group round management
+
+- `POST /student/tpo/groups` now accepts `total_rounds` (default `1`, max `10`).
+- Round APIs:
+  - `GET /student/tpo/groups/{group_id}/rounds/current`
+  - `PUT /student/tpo/groups/{group_id}/rounds/{round_no}/members/{student_id}` with `{ "status": "pending|qualified|rejected" }`
+  - `POST /student/tpo/groups/{group_id}/rounds/{round_no}/mail-preview`
+  - `POST /student/tpo/groups/{group_id}/rounds/{round_no}/finalize`
+- Finalize behavior:
+  - requires all students in current round to be marked `qualified` or `rejected`
+  - auto-creates next round from `qualified` students (until final round)
+  - can optionally queue round-result mails
+- Placement guard:
+  - `POST /student/tpo/placement` with `group_id` is allowed only in the final round for students still active in that round.

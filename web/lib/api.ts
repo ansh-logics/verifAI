@@ -23,6 +23,10 @@ import type {
   TpoMailJobProgressResponse,
   TpoLoginRequestBody,
   TpoPlacementRequest,
+  TpoRoundFinalizeRequest,
+  TpoRoundMailPreviewResponse,
+  TpoRoundState,
+  TpoRoundMemberStatusValue,
 } from "@/lib/types";
 import { getStoredTpoToken } from "@/lib/auth-storage";
 
@@ -287,6 +291,68 @@ export async function getTpoMailJobProgress(
   const { data } = await api.get<TpoMailJobProgressResponse>(`/student/tpo/mail/${jobId}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
+  return data;
+}
+
+export async function getTpoCurrentRound(
+  groupId: number,
+  tpoToken?: string | null,
+): Promise<TpoRoundState> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.get<TpoRoundState>(`/student/tpo/groups/${groupId}/rounds/current`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function updateTpoRoundMemberStatus(
+  groupId: number,
+  roundNo: number,
+  studentId: number,
+  status: TpoRoundMemberStatusValue,
+  tpoToken?: string | null,
+): Promise<TpoRoundState> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.put<TpoRoundState>(
+    `/student/tpo/groups/${groupId}/rounds/${roundNo}/members/${studentId}`,
+    { status },
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    },
+  );
+  return data;
+}
+
+export async function previewTpoRoundMails(
+  groupId: number,
+  roundNo: number,
+  tpoToken?: string | null,
+): Promise<TpoRoundMailPreviewResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.post<TpoRoundMailPreviewResponse>(
+    `/student/tpo/groups/${groupId}/rounds/${roundNo}/mail-preview`,
+    {},
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    },
+  );
+  return data;
+}
+
+export async function finalizeTpoRound(
+  groupId: number,
+  roundNo: number,
+  body: TpoRoundFinalizeRequest,
+  tpoToken?: string | null,
+): Promise<TpoRoundMailPreviewResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.post<TpoRoundMailPreviewResponse>(
+    `/student/tpo/groups/${groupId}/rounds/${roundNo}/finalize`,
+    body,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    },
+  );
   return data;
 }
 

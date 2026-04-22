@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import json
+import re
 import smtplib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,8 @@ from app.database.models import (
     StudentProfile,
     TpoAnalysisGroup,
     TpoMailJob,
+    TpoGroupRound,
+    TpoGroupRoundMember,
     TpoSettings,
 )
 from app.dependencies.auth import get_current_student_id, get_current_tpo_user, get_optional_student_id
@@ -39,6 +42,11 @@ from app.schemas.student import (
     TpoAuthTokenResponse,
     TpoGroupCreateRequest,
     TpoGroupMemberInfo,
+    TpoRoundMemberStatus,
+    TpoRoundMemberDecisionRequest,
+    TpoRoundFinalizeRequest,
+    TpoRoundMailPreviewResponse,
+    TpoRoundStateResponse,
     TpoGroupResponse,
     TpoOverviewRecentPlacement,
     TpoOverviewResponse,
@@ -146,6 +154,79 @@ def _active_placement_for_student(student: Student) -> PlacementRecord | None:
     return active[0]
 
 
+def _get_round_member_statuses(db: Session, group: TpoAnalysisGroup) -> list[TpoRoundMemberStatus]:
+    current_round = (
+        db.query(TpoGroupRound)
+        .filter(TpoGroupRound.group_id == group.id, TpoGroupRound.round_no == group.current_round_no)
+        .one_or_none()
+    )
+    if current_round is None:
+        return []
+    rows = (
+        db.query(TpoGroupRoundMember)
+        .filter(TpoGroupRoundMember.round_id == current_round.id)
+        .order_by(TpoGroupRoundMember.student_id.asc())
+        .all()
+    )
+    return [TpoRoundMemberStatus(student_id=row.student_id, status=row.status) for row in rows]
+
+
+def _can_mark_placed(group: TpoAnalysisGroup) -> bool:
+    return group.current_round_no == group.total_rounds
+
+
+def _serialize_tpo_group(db: Session, group: TpoAnalysisGroup) -> TpoGroupResponse:
+    members: list[TpoGroupMemberInfo] = []
+    for member in group.members:
+        student = member.student
+        if student is None:
+            continue
+        placement = _active_placement_for_student(student)
+        members.append(
+            TpoGroupMemberInfo(
+                student_id=student.id,
+                name=student.name,
+                email=student.email,
+                roll_no=student.roll_no,
+                branch=student.branch,
+                placement={
+                    "company_name": placement.company_name,
+                    "offer_type": placement.offer_type,
+                    "pay_amount": placement.pay_amount,
+                    "notes": placement.notes,
+                    "is_active": placement.is_active,
+                    "created_at": placement.created_at,
+                    "updated_at": placement.updated_at,
+                }
+                if placement
+                else None,
+            )
+        )
+    round_members = _get_round_member_statuses(db, group)
+    return TpoGroupResponse(
+        id=group.id,
+        title=group.title,
+        jd_summary=group.jd_summary,
+        created_by=group.created_by,
+        created_at=group.created_at,
+        company_name=group.company_name,
+        role_type=group.role_type,
+        pay_or_stipend=group.pay_or_stipend,
+        duration=group.duration,
+        bond_details=group.bond_details,
+        jd_topics=group.jd_topics or [],
+        jd_key_points=group.jd_key_points or [],
+        interview_timezone=group.interview_timezone,
+        total_rounds=group.total_rounds,
+        current_round_no=group.current_round_no,
+        round_state="finalized" if group.round_state == "finalized" else "in_progress",
+        is_final_round=group.current_round_no == group.total_rounds,
+        can_mark_placed=_can_mark_placed(group),
+        round_members=round_members,
+        members=members,
+    )
+
+
 def _require_non_empty(value: str, field_name: str) -> str:
     v = value.strip()
     if not v:
@@ -208,6 +289,18 @@ def _norm_roll(value: object) -> str:
     return value.strip().upper()
 
 
+def _norm_phone(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    digits = re.sub(r"\D", "", value)
+    if not digits:
+        return ""
+    # Normalize Indian numbers to local 10-digit form for robust comparisons.
+    if digits.startswith("91") and len(digits) >= 12:
+        return digits[-10:]
+    return digits[-10:] if len(digits) > 10 else digits
+
+
 def _extract_identity_from_blob(blob: dict[str, object] | None) -> dict[str, str]:
     if not isinstance(blob, dict):
         return {}
@@ -223,7 +316,7 @@ def _extract_identity_from_blob(blob: dict[str, object] | None) -> dict[str, str
             out["email"] = value
             break
     for key in ("phone", "mobile", "contact", "phone_number"):
-        value = _norm_text(blob.get(key))
+        value = _norm_phone(blob.get(key))
         if value:
             out["phone"] = value
             break
@@ -235,6 +328,53 @@ def _extract_identity_from_blob(blob: dict[str, object] | None) -> dict[str, str
     return out
 
 
+def _names_compatible(registered_name: str, external_name: str) -> bool:
+    reg_tokens = {token for token in re.findall(r"[a-z0-9]+", registered_name.lower()) if len(token) >= 2}
+    ext_tokens = {token for token in re.findall(r"[a-z0-9]+", external_name.lower()) if len(token) >= 2}
+    if not reg_tokens or not ext_tokens:
+        return True
+    return bool(reg_tokens.intersection(ext_tokens))
+
+
+def _assert_coding_identity_matches_student(student: Student, normalized: dict[str, object]) -> None:
+    expected_name = _norm_text(student.name)
+    expected_email = _norm_text(student.email)
+    coding_blobs: list[tuple[str, dict[str, object]]] = []
+    candidates = {
+        "github_data": normalized.get("github_data"),
+        "leetcode_data": normalized.get("leetcode_data"),
+    }
+    coding = normalized.get("coding")
+    if isinstance(coding, dict):
+        candidates["coding.github"] = coding.get("github")
+        candidates["coding.leetcode"] = coding.get("leetcode")
+
+    for label, raw_blob in candidates.items():
+        if isinstance(raw_blob, dict):
+            coding_blobs.append((label, raw_blob))
+
+    for label, blob in coding_blobs:
+        observed = _extract_identity_from_blob(blob)
+        observed_name = observed.get("name", "")
+        observed_email = observed.get("email", "")
+        if observed_name and expected_name and not _names_compatible(expected_name, observed_name):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Analysis blocked: coding profile identity does not match your registered account "
+                    f"(source: {label}, field: name)."
+                ),
+            )
+        if observed_email and expected_email and observed_email != expected_email:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Analysis blocked: coding profile identity does not match your registered account "
+                    f"(source: {label}, field: email)."
+                ),
+            )
+
+
 def _assert_analysis_identity_matches_student(student: Student, normalized: dict[str, object]) -> None:
     resume_identity = _extract_identity_from_blob(
         normalized.get("resume_data") if isinstance(normalized.get("resume_data"), dict) else {}
@@ -242,14 +382,36 @@ def _assert_analysis_identity_matches_student(student: Student, normalized: dict
     marksheet_identity = _extract_identity_from_blob(
         normalized.get("academic_data") if isinstance(normalized.get("academic_data"), dict) else {}
     )
-    merged: dict[str, str] = {**resume_identity, **marksheet_identity}
+    student_identity = _extract_identity_from_blob(
+        normalized.get("student") if isinstance(normalized.get("student"), dict) else {}
+    )
+    merged: dict[str, str] = {**resume_identity, **marksheet_identity, **student_identity}
     expected = {
         "name": _norm_text(student.name),
         "email": _norm_text(student.email),
-        "phone": _norm_text(student.phone),
+        "phone": _norm_phone(student.phone),
         "roll_no": _norm_roll(student.roll_no),
     }
+
+    # Name/email cross-reference rule:
+    # - allow if at least one of them matches
+    # - block only when both are present and both mismatch
+    observed_name = merged.get("name", "")
+    observed_email = merged.get("email", "")
+    name_mismatch = bool(observed_name and expected["name"] and observed_name != expected["name"])
+    email_mismatch = bool(observed_email and expected["email"] and observed_email != expected["email"])
+    if name_mismatch and email_mismatch:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Analysis blocked: uploaded resume/marksheet identity does not match your registered account. "
+                "Mismatch fields: name and email."
+            ),
+        )
+
     for field, observed in merged.items():
+        if field in {"name", "email"}:
+            continue
         target = expected.get(field, "")
         if field == "roll_no" and not target:
             # Permit first-time roll submission when account has no roll yet.
@@ -262,6 +424,7 @@ def _assert_analysis_identity_matches_student(student: Student, normalized: dict
                     f"Mismatch field: {field}."
                 ),
             )
+    _assert_coding_identity_matches_student(student, normalized)
 
 
 @router.post("/analyze", response_model=StudentAnalyzeResponse)
@@ -485,51 +648,11 @@ def create_tpo_group(
         jd_topics=payload.jd_topics,
         jd_key_points=payload.jd_key_points,
         interview_timezone=payload.interview_timezone,
+        total_rounds=payload.total_rounds,
         student_ids=payload.student_ids,
         created_by=tpo_user,
     )
-    members: list[TpoGroupMemberInfo] = []
-    for member in group.members:
-        student = member.student
-        if student is None:
-            continue
-        placement = _active_placement_for_student(student)
-        members.append(
-            TpoGroupMemberInfo(
-                student_id=student.id,
-                name=student.name,
-                email=student.email,
-                roll_no=student.roll_no,
-                branch=student.branch,
-                placement={
-                    "company_name": placement.company_name,
-                    "offer_type": placement.offer_type,
-                    "pay_amount": placement.pay_amount,
-                    "notes": placement.notes,
-                    "is_active": placement.is_active,
-                    "created_at": placement.created_at,
-                    "updated_at": placement.updated_at,
-                }
-                if placement
-                else None,
-            )
-        )
-    return TpoGroupResponse(
-        id=group.id,
-        title=group.title,
-        jd_summary=group.jd_summary,
-        created_by=group.created_by,
-        created_at=group.created_at,
-        company_name=group.company_name,
-        role_type=group.role_type,
-        pay_or_stipend=group.pay_or_stipend,
-        duration=group.duration,
-        bond_details=group.bond_details,
-        jd_topics=group.jd_topics or [],
-        jd_key_points=group.jd_key_points or [],
-        interview_timezone=group.interview_timezone,
-        members=members,
-    )
+    return _serialize_tpo_group(db, group)
 
 
 @router.get("/tpo/groups", response_model=list[TpoGroupResponse])
@@ -539,53 +662,166 @@ def list_tpo_groups(
 ) -> list[TpoGroupResponse]:
     service = ProfileService(db)
     groups = service.list_tpo_analysis_groups()
-    responses: list[TpoGroupResponse] = []
-    for group in groups:
-        members: list[TpoGroupMemberInfo] = []
-        for member in group.members:
-            student = member.student
-            if student is None:
-                continue
-            placement = _active_placement_for_student(student)
-            members.append(
-                TpoGroupMemberInfo(
-                    student_id=student.id,
-                    name=student.name,
-                    email=student.email,
-                    roll_no=student.roll_no,
-                    branch=student.branch,
-                    placement={
-                        "company_name": placement.company_name,
-                        "offer_type": placement.offer_type,
-                        "pay_amount": placement.pay_amount,
-                        "notes": placement.notes,
-                        "is_active": placement.is_active,
-                        "created_at": placement.created_at,
-                        "updated_at": placement.updated_at,
-                    }
-                    if placement
-                    else None,
-                )
-            )
-        responses.append(
-            TpoGroupResponse(
-                id=group.id,
-                title=group.title,
-                jd_summary=group.jd_summary,
-                created_by=group.created_by,
-                created_at=group.created_at,
-                company_name=group.company_name,
-                role_type=group.role_type,
-                pay_or_stipend=group.pay_or_stipend,
-                duration=group.duration,
-                bond_details=group.bond_details,
-                jd_topics=group.jd_topics or [],
-                jd_key_points=group.jd_key_points or [],
-                interview_timezone=group.interview_timezone,
-                members=members,
-            )
+    return [_serialize_tpo_group(db, group) for group in groups]
+
+
+@router.get("/tpo/groups/{group_id}/rounds/current", response_model=TpoRoundStateResponse)
+def get_current_round_state(
+    group_id: int,
+    db: Session = Depends(get_db),
+    _tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoRoundStateResponse:
+    group = db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found.")
+    current_round = (
+        db.query(TpoGroupRound)
+        .filter(TpoGroupRound.group_id == group.id, TpoGroupRound.round_no == group.current_round_no)
+        .one_or_none()
+    )
+    if current_round is None:
+        raise HTTPException(status_code=404, detail="Current round not found.")
+    members = (
+        db.query(TpoGroupRoundMember)
+        .filter(TpoGroupRoundMember.round_id == current_round.id)
+        .order_by(TpoGroupRoundMember.student_id.asc())
+        .all()
+    )
+    return TpoRoundStateResponse(
+        group_id=group.id,
+        round_no=current_round.round_no,
+        total_rounds=group.total_rounds,
+        status="finalized" if current_round.status == "finalized" else "in_progress",
+        is_final_round=current_round.round_no == group.total_rounds,
+        can_mark_placed=current_round.round_no == group.total_rounds,
+        members=[TpoRoundMemberStatus(student_id=row.student_id, status=row.status) for row in members],
+    )
+
+
+@router.put("/tpo/groups/{group_id}/rounds/{round_no}/members/{student_id}", response_model=TpoRoundStateResponse)
+def update_round_member_status(
+    group_id: int,
+    round_no: int,
+    student_id: int,
+    payload: TpoRoundMemberDecisionRequest,
+    db: Session = Depends(get_db),
+    _tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoRoundStateResponse:
+    service = ProfileService(db)
+    updated_round = service.update_round_member_status(
+        group_id=group_id,
+        round_no=round_no,
+        student_id=student_id,
+        status=payload.status,
+    )
+    group = db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found.")
+    members = (
+        db.query(TpoGroupRoundMember)
+        .filter(TpoGroupRoundMember.round_id == updated_round.id)
+        .order_by(TpoGroupRoundMember.student_id.asc())
+        .all()
+    )
+    return TpoRoundStateResponse(
+        group_id=group.id,
+        round_no=updated_round.round_no,
+        total_rounds=group.total_rounds,
+        status="finalized" if updated_round.status == "finalized" else "in_progress",
+        is_final_round=updated_round.round_no == group.total_rounds,
+        can_mark_placed=updated_round.round_no == group.total_rounds,
+        members=[TpoRoundMemberStatus(student_id=row.student_id, status=row.status) for row in members],
+    )
+
+
+@router.post("/tpo/groups/{group_id}/rounds/{round_no}/mail-preview", response_model=TpoRoundMailPreviewResponse)
+def preview_round_mails(
+    group_id: int,
+    round_no: int,
+    db: Session = Depends(get_db),
+    _tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoRoundMailPreviewResponse:
+    group = db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found.")
+    round_row = (
+        db.query(TpoGroupRound)
+        .filter(TpoGroupRound.group_id == group.id, TpoGroupRound.round_no == round_no)
+        .one_or_none()
+    )
+    if round_row is None:
+        raise HTTPException(status_code=404, detail="Round not found.")
+    members = db.query(TpoGroupRoundMember).filter(TpoGroupRoundMember.round_id == round_row.id).all()
+    qualified_ids = sorted([row.student_id for row in members if row.status == "qualified"])
+    rejected_ids = sorted([row.student_id for row in members if row.status == "rejected"])
+    return TpoRoundMailPreviewResponse(
+        group_id=group.id,
+        round_no=round_no,
+        is_final_round=round_no == group.total_rounds,
+        qualified_student_ids=qualified_ids,
+        rejected_student_ids=rejected_ids,
+        qualified_count=len(qualified_ids),
+        rejected_count=len(rejected_ids),
+        next_round_no=(round_no + 1) if round_no < group.total_rounds else None,
+        can_mark_placed=round_no == group.total_rounds,
+    )
+
+
+@router.post("/tpo/groups/{group_id}/rounds/{round_no}/finalize", response_model=TpoRoundMailPreviewResponse)
+def finalize_round(
+    group_id: int,
+    round_no: int,
+    payload: TpoRoundFinalizeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoRoundMailPreviewResponse:
+    service = ProfileService(db)
+    group, round_row = service.finalize_round(group_id=group_id, round_no=round_no)
+    round_members = db.query(TpoGroupRoundMember).filter(TpoGroupRoundMember.round_id == round_row.id).all()
+    qualified_ids = sorted([row.student_id for row in round_members if row.status == "qualified"])
+    rejected_ids = sorted([row.student_id for row in round_members if row.status == "rejected"])
+
+    if payload.send_emails:
+        schedule_payload = TpoMailActionRequest(
+            group_id=group.id,
+            mode="bulk",
+            mail_type="round_result",
+            round_no=round_no,
+            outcome="all",
+            additional_note=payload.initial_round_note or payload.shortlisted_note,
+            interview_date=payload.interview_date,
+            interview_time_start=payload.interview_time_start,
+            interview_time_end=payload.interview_time_end,
         )
-    return responses
+        mail_job = TpoMailJob(
+            group_id=group.id,
+            requested_by=tpo_user,
+            mail_type=schedule_payload.mail_type,
+            round_no=round_no,
+            outcome="all",
+            status="queued",
+            total_recipients=len(qualified_ids) + len(rejected_ids),
+            processed_count=0,
+            success_count=0,
+            failure_count=0,
+        )
+        db.add(mail_job)
+        db.commit()
+        db.refresh(mail_job)
+        background_tasks.add_task(_process_bulk_mail_job, mail_job.id, schedule_payload.model_dump())
+
+    return TpoRoundMailPreviewResponse(
+        group_id=group.id,
+        round_no=round_no,
+        is_final_round=round_no == group.total_rounds,
+        qualified_student_ids=qualified_ids,
+        rejected_student_ids=rejected_ids,
+        qualified_count=len(qualified_ids),
+        rejected_count=len(rejected_ids),
+        next_round_no=(round_no + 1) if round_no < group.total_rounds and qualified_ids else None,
+        can_mark_placed=group.current_round_no == group.total_rounds,
+    )
 
 
 @router.get("/tpo/overview", response_model=TpoOverviewResponse)
@@ -742,7 +978,7 @@ def delete_tpo_group(
 def mark_placement(
     payload: PlacementMarkRequest,
     db: Session = Depends(get_db),
-    _tpo_user: str = Depends(get_current_tpo_user),
+    tpo_user: str = Depends(get_current_tpo_user),
 ) -> StudentProfileStoreResponse:
     service = ProfileService(db)
     record = service.mark_student_placement(
@@ -753,6 +989,31 @@ def mark_placement(
         pay_amount=payload.pay_amount,
         notes=payload.notes,
     )
+    _upsert_tpo_settings_defaults(db, tpo_user)
+    student = db.query(Student).filter(Student.id == record.student_id).one_or_none()
+    if student is not None:
+        settings = get_settings()
+        mailer = MailService(settings)
+        offer_type = (record.offer_type or "job").strip().title()
+        subject = f"Placement Confirmation: {record.company_name}"
+        body = (
+            f"Dear {student.name},\n\n"
+            "Congratulations.\n\n"
+            "Your placement status has been updated by the Training and Placement Office.\n\n"
+            "Offer Details:\n"
+            f"- Company: {record.company_name}\n"
+            f"- Offer Type: {offer_type}\n"
+            f"- Compensation: {record.pay_amount if record.pay_amount is not None else 'As communicated by TPO'}\n"
+            f"- Notes: {record.notes or 'N/A'}\n\n"
+            "Please connect with TPO for joining formalities and documentation steps.\n\n"
+            "Best regards,\n"
+            "Training and Placement Office\n"
+            "VerifAI"
+        ).strip()
+        try:
+            mailer.send_email(to_email=student.email, subject=subject, body=body)
+        except (smtplib.SMTPException, OSError, ValueError):
+            logger.warning("Failed to send placement confirmation email for student_id=%s", student.id)
     return StudentProfileStoreResponse(
         student_id=record.student_id,
         profile_id=0,
@@ -811,6 +1072,77 @@ def _render_subject_and_body(payload: TpoMailActionRequest, student: Student, gr
     role = (group.role_type or "job opportunity").strip()
     note_block = _optional_note_block(payload.additional_note)
     jd_block = _jd_context_block(group)
+    round_no = payload.round_no or group.current_round_no
+
+    if payload.mail_type == "round_invite":
+        tz = group.interview_timezone or "local time"
+        subject = (payload.subject or f"Interview Round {round_no}: {company} {role.title()}").strip()
+        schedule_block = ""
+        if payload.interview_date and payload.interview_time_start and payload.interview_time_end:
+            schedule_block = (
+                "Round Schedule:\n"
+                f"- Date: {payload.interview_date}\n"
+                f"- Time: {payload.interview_time_start} to {payload.interview_time_end}\n"
+                f"- Timezone: {tz}\n"
+            )
+        body = (
+            f"Dear {student.name},\n\n"
+            f"You are invited to appear for Interview Round {round_no} for the {role} role at {company}.\n\n"
+            "Round Details:\n"
+            f"- Company: {company}\n"
+            f"- Role: {role}\n"
+            f"- Round: {round_no}\n"
+            f"{schedule_block}"
+            f"{jd_block}\n"
+            f"{note_block}\n"
+            "Please be prepared and report on time. Carry required documents and keep checking the placement portal for updates.\n\n"
+            "Best regards,\n"
+            "Training and Placement Office\n"
+            "VerifAI"
+        ).strip()
+        return subject, body
+
+    if payload.mail_type == "round_result":
+        outcome = (payload.outcome or "all").strip().lower()
+        if outcome == "rejected":
+            subject = (payload.subject or f"Round {round_no} Result Update ({company})").strip()
+            body = (
+                f"Dear {student.name},\n\n"
+                f"Thank you for participating in Round {round_no} for the {role} role at {company}.\n\n"
+                "After careful evaluation, we are unable to progress your application to the next round at this time.\n"
+                "We appreciate your effort and encourage you to continue applying for future opportunities.\n\n"
+                f"{note_block}\n"
+                "Wishing you success ahead.\n\n"
+                "Best regards,\n"
+                "Training and Placement Office\n"
+                "VerifAI"
+            ).strip()
+            return subject, body
+        next_round_no = round_no + 1 if round_no < group.total_rounds else round_no
+        prep_topics = _clean_lines(group.jd_topics if isinstance(group.jd_topics, list) else [], limit=5)
+        prep_block = ""
+        if prep_topics:
+            prep_block = "Recommended preparation focus for the next round:\n" + "\n".join(
+                f"- {topic}" for topic in prep_topics
+            ) + "\n"
+        subject = (payload.subject or f"Qualified in Round {round_no} - Next Round Update ({company})").strip()
+        body = (
+            f"Dear {student.name},\n\n"
+            f"Congratulations. You have qualified in Round {round_no} of the selection process for the {role} role at {company}.\n\n"
+            f"Status Update:\n"
+            f"- Current round result: Qualified (Round {round_no})\n"
+            f"- Next stage: Round {next_round_no}\n"
+            f"- Company: {company}\n"
+            f"- Role: {role}\n\n"
+            f"{prep_block}"
+            f"{jd_block}\n"
+            f"{note_block}\n"
+            "Please keep checking your email and the placement portal for schedule, venue, and reporting instructions for the next round.\n\n"
+            "Best regards,\n"
+            "Training and Placement Office\n"
+            "VerifAI"
+        ).strip()
+        return subject, body
 
     if payload.mail_type == "shortlist_notice":
         subject = (payload.subject or f"Shortlist Update: {company} {role.title()}").strip()
@@ -920,6 +1252,32 @@ def _mail_job_to_progress_response(job: TpoMailJob) -> TpoMailJobProgressRespons
     )
 
 
+def _filter_round_recipients(
+    *,
+    members: list[Student],
+    round_members: list[TpoGroupRoundMember],
+    outcome: str | None,
+) -> tuple[list[Student], dict[int, str]]:
+    status_by_student = {item.student_id: item.status for item in round_members}
+    requested_outcome = (outcome or "").strip().lower()
+
+    if requested_outcome == "qualified":
+        allowed_ids = {item.student_id for item in round_members if item.status == "qualified"}
+    elif requested_outcome == "rejected":
+        allowed_ids = {item.student_id for item in round_members if item.status == "rejected"}
+    elif requested_outcome == "all":
+        # Round-result "all" primarily targets finalized outcomes.
+        # If none are finalized yet (all pending), fall back to all round members.
+        resolved_ids = {item.student_id for item in round_members if item.status in {"qualified", "rejected"}}
+        allowed_ids = resolved_ids or {item.student_id for item in round_members}
+    else:
+        # Default for round-based mail actions (invite/schedule/prep/custom):
+        # all students currently in the selected round, including pending.
+        allowed_ids = {item.student_id for item in round_members}
+
+    return [student for student in members if student.id in allowed_ids], status_by_student
+
+
 def _process_bulk_mail_job(job_id: int, payload_dict: dict[str, object]) -> None:
     db = SessionLocal()
     try:
@@ -937,6 +1295,21 @@ def _process_bulk_mail_job(job_id: int, payload_dict: dict[str, object]) -> None
             return
         payload = TpoMailActionRequest.model_validate(payload_dict)
         members = [member.student for member in group.members if member.student is not None]
+        member_status_by_student: dict[int, str] = {}
+        if payload.round_no is not None:
+            round_row = (
+                db.query(TpoGroupRound)
+                .filter(TpoGroupRound.group_id == group.id, TpoGroupRound.round_no == payload.round_no)
+                .one_or_none()
+            )
+            if round_row is None:
+                raise HTTPException(status_code=404, detail="Round not found.")
+            round_members = db.query(TpoGroupRoundMember).filter(TpoGroupRoundMember.round_id == round_row.id).all()
+            members, member_status_by_student = _filter_round_recipients(
+                members=members,
+                round_members=round_members,
+                outcome=payload.outcome,
+            )
         if payload.mode == "individual" and payload.student_id is not None:
             members = [student for student in members if student.id == payload.student_id]
 
@@ -950,7 +1323,12 @@ def _process_bulk_mail_job(job_id: int, payload_dict: dict[str, object]) -> None
 
         for student in members:
             try:
-                subject, body = _render_subject_and_body(payload, student, group)
+                if payload.mail_type == "round_result" and payload.outcome == "all":
+                    student_outcome = member_status_by_student.get(student.id, "qualified")
+                    student_payload = payload.model_copy(update={"outcome": student_outcome})
+                    subject, body = _render_subject_and_body(student_payload, student, group)
+                else:
+                    subject, body = _render_subject_and_body(payload, student, group)
                 mailer.send_email(to_email=student.email, subject=subject, body=body)
                 job.success_count += 1
             except (HTTPException, smtplib.SMTPException, OSError, ValueError) as exc:
@@ -983,6 +1361,20 @@ def trigger_tpo_mail_action(
         raise HTTPException(status_code=404, detail="Group not found.")
 
     members = [member.student for member in group.members if member.student is not None]
+    if payload.round_no is not None:
+        round_row = (
+            db.query(TpoGroupRound)
+            .filter(TpoGroupRound.group_id == group.id, TpoGroupRound.round_no == payload.round_no)
+            .one_or_none()
+        )
+        if round_row is None:
+            raise HTTPException(status_code=404, detail="Round not found.")
+        round_members = db.query(TpoGroupRoundMember).filter(TpoGroupRoundMember.round_id == round_row.id).all()
+        members, _status_map = _filter_round_recipients(
+            members=members,
+            round_members=round_members,
+            outcome=payload.outcome,
+        )
     if payload.mode == "individual":
         if payload.student_id is None:
             raise HTTPException(status_code=400, detail="student_id is required for individual mail mode.")
@@ -995,6 +1387,8 @@ def trigger_tpo_mail_action(
             group_id=group.id,
             requested_by=tpo_user,
             mail_type=payload.mail_type,
+            round_no=payload.round_no,
+            outcome=payload.outcome,
             status="queued",
             total_recipients=len(members),
             processed_count=0,
@@ -1018,7 +1412,22 @@ def trigger_tpo_mail_action(
     settings = get_settings()
     mailer = MailService(settings)
     student = members[0]
-    subject, body = _render_subject_and_body(payload, student, group)
+    effective_payload = payload
+    if payload.mail_type == "round_result" and payload.outcome == "all" and payload.round_no is not None:
+        round_row = (
+            db.query(TpoGroupRound)
+            .filter(TpoGroupRound.group_id == group.id, TpoGroupRound.round_no == payload.round_no)
+            .one_or_none()
+        )
+        if round_row is not None:
+            round_member = (
+                db.query(TpoGroupRoundMember)
+                .filter(TpoGroupRoundMember.round_id == round_row.id, TpoGroupRoundMember.student_id == student.id)
+                .one_or_none()
+            )
+            if round_member is not None:
+                effective_payload = payload.model_copy(update={"outcome": round_member.status})
+    subject, body = _render_subject_and_body(effective_payload, student, group)
     try:
         mailer.send_email(to_email=student.email, subject=subject, body=body)
     except (smtplib.SMTPException, OSError, ValueError) as exc:

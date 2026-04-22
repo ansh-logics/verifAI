@@ -76,6 +76,7 @@ def _ensure_indexed(service: SearchService, db: Session) -> None:
                 "id": student.id,
                 "name": student.name,
                 "email": student.email,
+                "phone": student.phone,
                 "branch": student.branch,
                 "cgpa": student.cgpa,
                 "student_id": student.id,

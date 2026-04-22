@@ -101,6 +101,23 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN jd_topics SET NOT NULL"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN jd_key_points SET NOT NULL"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS interview_timezone VARCHAR(64)"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS total_rounds INTEGER DEFAULT 1"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS current_round_no INTEGER DEFAULT 1"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS round_state VARCHAR(32) DEFAULT 'in_progress'"))
+        conn.execute(text("UPDATE tpo_analysis_groups SET total_rounds = 1 WHERE total_rounds IS NULL OR total_rounds < 1"))
+        conn.execute(text("UPDATE tpo_analysis_groups SET current_round_no = 1 WHERE current_round_no IS NULL OR current_round_no < 1"))
+        conn.execute(
+            text(
+                """
+                UPDATE tpo_analysis_groups
+                SET round_state = 'in_progress'
+                WHERE round_state IS NULL OR trim(round_state) = ''
+                """
+            )
+        )
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN total_rounds SET NOT NULL"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN current_round_no SET NOT NULL"))
+        conn.execute(text("ALTER TABLE tpo_analysis_groups ALTER COLUMN round_state SET NOT NULL"))
         conn.execute(
             text(
                 """
@@ -167,6 +184,8 @@ def _apply_startup_schema_updates() -> None:
         )
         conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS requested_by VARCHAR(128)"))
         conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS mail_type VARCHAR(64)"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS round_no INTEGER"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS outcome VARCHAR(32)"))
         conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'queued'"))
         conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS total_recipients INTEGER DEFAULT 0"))
         conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS processed_count INTEGER DEFAULT 0"))
@@ -179,6 +198,45 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_mail_jobs_group_id ON tpo_mail_jobs (group_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_mail_jobs_status ON tpo_mail_jobs (status)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_mail_jobs_round_no ON tpo_mail_jobs (round_no)"))
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS tpo_group_rounds (
+                    id SERIAL PRIMARY KEY,
+                    group_id INTEGER NOT NULL REFERENCES tpo_analysis_groups(id) ON DELETE CASCADE,
+                    round_no INTEGER NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'in_progress',
+                    finalized_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_group_rounds_group_id ON tpo_group_rounds (group_id)"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_tpo_group_round_unique ON tpo_group_rounds (group_id, round_no)"))
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS tpo_group_round_members (
+                    id SERIAL PRIMARY KEY,
+                    round_id INTEGER NOT NULL REFERENCES tpo_group_rounds(id) ON DELETE CASCADE,
+                    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_group_round_members_round_id ON tpo_group_round_members (round_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_group_round_members_student_id ON tpo_group_round_members (student_id)"))
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_tpo_group_round_member_unique ON tpo_group_round_members (round_id, student_id)"
+            )
+        )
 
 
 @app.on_event("startup")
