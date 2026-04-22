@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
@@ -11,7 +11,7 @@ from app.database.database import Base
 
 
 def utc_now() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 
 class Student(Base):
@@ -125,6 +125,10 @@ class TpoAnalysisGroup(Base):
         back_populates="group",
         cascade="all, delete-orphan",
     )
+    mail_jobs: Mapped[list["TpoMailJob"]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
 
 
 class TpoAnalysisGroupMember(Base):
@@ -137,4 +141,48 @@ class TpoAnalysisGroupMember(Base):
 
     group: Mapped[TpoAnalysisGroup] = relationship(back_populates="members")
     student: Mapped[Student] = relationship(back_populates="tpo_group_memberships")
+
+
+class TpoSettings(Base):
+    __tablename__ = "tpo_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tpo_username: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    institute_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    sender_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reply_to_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    default_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    stale_group_reminder_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    daily_queue_summary_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    placement_update_confirmation_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    tpo_password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class TpoMailJob(Base):
+    __tablename__ = "tpo_mail_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("tpo_analysis_groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    mail_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
+    total_recipients: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    success_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    group: Mapped[TpoAnalysisGroup] = relationship(back_populates="mail_jobs")
 

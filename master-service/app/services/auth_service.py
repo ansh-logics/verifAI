@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
@@ -25,23 +25,23 @@ class AuthService:
         return pwd_context.verify(plain_password, password_hash)
 
     def create_access_token(self, *, student_id: int, email: str, roll_no: str | None) -> str:
-        expire = datetime.now(UTC) + timedelta(minutes=self.settings.auth_access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=self.settings.auth_access_token_expire_minutes)
         payload: dict[str, Any] = {
             "sub": str(student_id),
             "email": email,
             "roll_no": roll_no,
             "exp": expire,
-            "iat": datetime.now(UTC),
+            "iat": datetime.now(timezone.utc),
         }
         return jwt.encode(payload, self.settings.auth_jwt_secret, algorithm=self.settings.auth_jwt_algorithm)
 
     def create_tpo_access_token(self, *, username: str) -> str:
-        expire = datetime.now(UTC) + timedelta(minutes=self.settings.tpo_access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=self.settings.tpo_access_token_expire_minutes)
         payload: dict[str, Any] = {
             "sub": username,
             "role": "tpo",
             "exp": expire,
-            "iat": datetime.now(UTC),
+            "iat": datetime.now(timezone.utc),
         }
         return jwt.encode(payload, self.settings.auth_jwt_secret, algorithm=self.settings.auth_jwt_algorithm)
 

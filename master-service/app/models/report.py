@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -67,7 +67,7 @@ class SourcesPayload(BaseModel):
 
 class MasterAnalysisReport(BaseModel):
     report_version: int = 2
-    generated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     student: StudentPayload = Field(default_factory=StudentPayload)
     academics: AcademicsPayload = Field(default_factory=AcademicsPayload)

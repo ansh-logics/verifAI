@@ -65,10 +65,16 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle>Create account</CardTitle>
+    <main className="relative flex min-h-screen items-center justify-center bg-[#f8f9fa] p-6 text-slate-900">
+      <Link
+        href="/"
+        className="absolute left-6 top-6 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+      >
+        Back to home
+      </Link>
+      <Card className="w-full max-w-lg rounded-3xl border border-slate-200/80 bg-white shadow-xl">
+        <CardHeader className="space-y-2">
+          <CardTitle className="text-2xl font-semibold tracking-tight">Create account</CardTitle>
           <CardDescription>
             Register with basic account details. Academic and profile details
             will be captured in step 2.
@@ -77,40 +83,47 @@ export default function RegisterPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} required />
+              <label className="text-sm font-medium text-slate-700">Name</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} required className="h-11 rounded-xl border-slate-200" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
+              <label className="text-sm font-medium text-slate-700">Email</label>
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                className="h-11 rounded-xl border-slate-200"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Password</label>
+              <label className="text-sm font-medium text-slate-700">Password</label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
+                className="h-11 rounded-xl border-slate-200"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Phone</label>
+              <label className="text-sm font-medium text-slate-700">Phone</label>
               <Input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 required
                 minLength={7}
+                className="h-11 rounded-xl border-slate-200"
               />
             </div>
             <div className="flex flex-col gap-3">
-              <Button type="submit" disabled={loading}>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="h-11 rounded-xl bg-blue-600 text-white hover:bg-blue-700"
+              >
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -224,6 +224,52 @@ export interface TpoMailActionRequest {
 export interface TpoMailActionResponse {
   success: boolean;
   message: string;
+  job_id?: number;
+  status?: "queued" | "running" | "completed" | "failed";
+  total_recipients?: number;
+  processed_count?: number;
+  success_count?: number;
+  failure_count?: number;
+}
+
+export interface TpoMailJobProgressResponse {
+  job_id: number;
+  group_id: number;
+  mail_type: TpoMailType;
+  status: "queued" | "running" | "completed" | "failed";
+  total_recipients: number;
+  processed_count: number;
+  success_count: number;
+  failure_count: number;
+  progress_percent: number;
+  last_error?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TpoSettingsData {
+  display_name: string | null;
+  contact_number: string | null;
+  institute_name: string | null;
+  sender_name: string | null;
+  reply_to_email: string | null;
+  default_timezone: string | null;
+  stale_group_reminder_enabled: boolean;
+  daily_queue_summary_enabled: boolean;
+  placement_update_confirmation_enabled: boolean;
+}
+
+export interface TpoSettingsResponse extends TpoSettingsData {
+  tpo_username: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TpoChangePasswordRequest {
+  current_password: string;
+  new_password: string;
 }
 
 export interface TpoOverviewRecentPlacement {

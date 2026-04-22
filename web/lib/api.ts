@@ -12,11 +12,15 @@ import type {
   StudentProfileDetail,
   StudentProfilePayload,
   TpoCreateGroupRequest,
+  TpoChangePasswordRequest,
   TpoOverviewResponse,
+  TpoSettingsData,
+  TpoSettingsResponse,
   TpoAuthTokenResponse,
   TpoGroup,
   TpoMailActionRequest,
   TpoMailActionResponse,
+  TpoMailJobProgressResponse,
   TpoLoginRequestBody,
   TpoPlacementRequest,
 } from "@/lib/types";
@@ -212,6 +216,36 @@ export async function getTpoOverview(tpoToken?: string | null): Promise<TpoOverv
   return data;
 }
 
+export async function getTpoSettings(tpoToken?: string | null): Promise<TpoSettingsResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.get<TpoSettingsResponse>("/student/tpo/settings", {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function updateTpoSettings(
+  body: TpoSettingsData,
+  tpoToken?: string | null,
+): Promise<TpoSettingsResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.put<TpoSettingsResponse>("/student/tpo/settings", body, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function changeTpoPassword(
+  body: TpoChangePasswordRequest,
+  tpoToken?: string | null,
+): Promise<TpoMailActionResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.post<TpoMailActionResponse>("/student/tpo/settings/change-password", body, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
 export async function deleteTpoGroup(groupId: number, tpoToken?: string | null): Promise<TpoMailActionResponse> {
   const token = tpoToken ?? getStoredTpoToken();
   const { data } = await api.delete<TpoMailActionResponse>(`/student/tpo/groups/${groupId}`, {
@@ -236,5 +270,33 @@ export async function triggerTpoMailAction(
   const { data } = await api.post<TpoMailActionResponse>("/student/tpo/mail", body, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
+  return data;
+}
+
+export async function getTpoMailJobProgress(
+  jobId: number,
+  tpoToken?: string | null,
+): Promise<TpoMailJobProgressResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.get<TpoMailJobProgressResponse>(`/student/tpo/mail/${jobId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function sendCandidateEmail(
+  candidateId: number,
+  subject?: string,
+  body?: string
+): Promise<{ success: boolean; message: string }> {
+  const formData = new FormData();
+  if (subject) formData.append("subject", subject);
+  if (body) formData.append("body", body);
+
+  const { data } = await api.post<{ success: boolean; message: string }>(
+    `/student/${candidateId}/send-email`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
   return data;
 }

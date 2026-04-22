@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,33 +44,47 @@ export default function TpoLoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>TPO Dashboard Login</CardTitle>
-          <CardDescription>Sign in with TPO credentials to access hiring dashboard.</CardDescription>
+    <main className="relative flex min-h-screen items-center justify-center bg-[#f8f9fa] p-6 text-slate-900">
+      <Link
+        href="/"
+        className="absolute left-6 top-6 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+      >
+        Back to home
+      </Link>
+      <Card className="w-full max-w-md rounded-3xl border border-slate-200/80 bg-white shadow-xl">
+        <CardHeader className="space-y-2">
+          <CardTitle className="text-2xl font-semibold tracking-tight">TPO Dashboard Login</CardTitle>
+          <CardDescription className="text-slate-600">
+            Sign in with TPO credentials to access hiring dashboard.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Username</label>
+              <label className="text-sm font-medium text-slate-700">Username</label>
               <Input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 placeholder="tpo"
+                className="h-11 rounded-xl border-slate-200"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Password</label>
+              <label className="text-sm font-medium text-slate-700">Password</label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
+                className="h-11 rounded-xl border-slate-200"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-700"
+              disabled={loading}
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

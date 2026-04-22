@@ -23,6 +23,7 @@ app = FastAPI(
     description="Orchestrates resume and coding profile analyzers.",
 )
 
+# CORS middleware MUST be added first to take precedence
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -42,6 +43,7 @@ app.include_router(search_router)
 
 def _apply_startup_schema_updates() -> None:
     # Keep legacy deployments working when new auth columns are introduced.
+    # Canonical student email model is single-field: students.email.
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS roll_no VARCHAR(64)"))
         conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT ''"))
@@ -53,6 +55,12 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("ALTER TABLE students ALTER COLUMN gender SET NOT NULL"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_students_roll_no_unique ON students (roll_no)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_roll_no_lookup ON students (roll_no)"))
+        conn.execute(text("DROP INDEX IF EXISTS ix_students_test_email_lookup"))
+        conn.execute(text("DROP INDEX IF EXISTS ix_students_real_email_lookup"))
+        conn.execute(text("DROP INDEX IF EXISTS ix_students_preferred_email_type"))
+        conn.execute(text("ALTER TABLE students DROP COLUMN IF EXISTS test_email"))
+        conn.execute(text("ALTER TABLE students DROP COLUMN IF EXISTS real_email"))
+        conn.execute(text("ALTER TABLE students DROP COLUMN IF EXISTS preferred_email_type"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_gender ON students (gender)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_backlog ON students (has_active_backlog)"))
 
@@ -67,6 +75,84 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS duration VARCHAR(128)"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS bond_details TEXT"))
         conn.execute(text("ALTER TABLE tpo_analysis_groups ADD COLUMN IF NOT EXISTS interview_timezone VARCHAR(64)"))
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS tpo_settings (
+                    id SERIAL PRIMARY KEY,
+                    tpo_username VARCHAR(128) UNIQUE NOT NULL,
+                    display_name VARCHAR(255),
+                    contact_number VARCHAR(32),
+                    institute_name VARCHAR(255),
+                    sender_name VARCHAR(255),
+                    reply_to_email VARCHAR(255),
+                    default_timezone VARCHAR(64),
+                    stale_group_reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    daily_queue_summary_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    placement_update_confirmation_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    tpo_password_hash VARCHAR(255),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS contact_number VARCHAR(32)"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS institute_name VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS sender_name VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS reply_to_email VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS default_timezone VARCHAR(64)"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS stale_group_reminder_enabled BOOLEAN DEFAULT TRUE"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS daily_queue_summary_enabled BOOLEAN DEFAULT TRUE"))
+        conn.execute(
+            text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS placement_update_confirmation_enabled BOOLEAN DEFAULT TRUE")
+        )
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS tpo_password_hash VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()"))
+        conn.execute(text("ALTER TABLE tpo_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_tpo_settings_username ON tpo_settings (tpo_username)"))
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS tpo_mail_jobs (
+                    id SERIAL PRIMARY KEY,
+                    group_id INTEGER NOT NULL REFERENCES tpo_analysis_groups(id) ON DELETE CASCADE,
+                    requested_by VARCHAR(128) NOT NULL,
+                    mail_type VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'queued',
+                    total_recipients INTEGER NOT NULL DEFAULT 0,
+                    processed_count INTEGER NOT NULL DEFAULT 0,
+                    success_count INTEGER NOT NULL DEFAULT 0,
+                    failure_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    started_at TIMESTAMPTZ,
+                    finished_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES tpo_analysis_groups(id) ON DELETE CASCADE"
+            )
+        )
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS requested_by VARCHAR(128)"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS mail_type VARCHAR(64)"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'queued'"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS total_recipients INTEGER DEFAULT 0"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS processed_count INTEGER DEFAULT 0"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS success_count INTEGER DEFAULT 0"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS failure_count INTEGER DEFAULT 0"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS last_error TEXT"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()"))
+        conn.execute(text("ALTER TABLE tpo_mail_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_mail_jobs_group_id ON tpo_mail_jobs (group_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tpo_mail_jobs_status ON tpo_mail_jobs (status)"))
 
 
 @app.on_event("startup")

@@ -9,16 +9,18 @@ import { toast } from "sonner";
 
 import { clearTpoAuth } from "@/lib/auth-storage";
 import {
+  getTpoMailJobProgress,
   getApiErrorMessage,
   listTpoGroups,
   markStudentPlacement,
   triggerTpoMailAction,
 } from "@/lib/api";
-import type { TpoGroup, TpoMailType } from "@/lib/types";
+import type { TpoGroup, TpoMailJobProgressResponse, TpoMailType } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 
 export default function PlacementGroupDetailPage() {
   const params = useParams<{ groupId: string }>();
@@ -26,6 +28,8 @@ export default function PlacementGroupDetailPage() {
   const [group, setGroup] = useState<TpoGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [mailing, setMailing] = useState(false);
+  const [bulkMailJob, setBulkMailJob] = useState<TpoMailJobProgressResponse | null>(null);
+  const [bulkPolling, setBulkPolling] = useState(false);
   const [placingStudentId, setPlacingStudentId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mailType, setMailType] = useState<TpoMailType>("shortlist_notice");
@@ -38,6 +42,13 @@ export default function PlacementGroupDetailPage() {
   const [interviewEnd, setInterviewEnd] = useState("");
 
   const groupId = useMemo(() => Number(params.groupId), [params.groupId]);
+  const bulkStatusLabel = useMemo(() => {
+    if (!bulkMailJob) return "";
+    if (bulkMailJob.status === "queued") return "Queued";
+    if (bulkMailJob.status === "running") return "Sending";
+    if (bulkMailJob.status === "completed") return "Completed";
+    return bulkMailJob.failure_count > 0 ? "Completed with failures" : "Failed";
+  }, [bulkMailJob]);
 
   useEffect(() => {
     let mounted = true;
@@ -93,6 +104,26 @@ export default function PlacementGroupDetailPage() {
         interview_date: interviewDate || undefined,
         interview_time_start: interviewStart || undefined,
         interview_time_end: interviewEnd || undefined,
+      });
+      if (typeof result.job_id !== "number") {
+        throw new Error("Bulk mail job could not be started.");
+      }
+      setBulkPolling(true);
+      setBulkMailJob({
+        job_id: result.job_id,
+        group_id: group.id,
+        mail_type: mailType,
+        status: result.status ?? "queued",
+        total_recipients: result.total_recipients ?? group.members.length,
+        processed_count: result.processed_count ?? 0,
+        success_count: result.success_count ?? 0,
+        failure_count: result.failure_count ?? 0,
+        progress_percent: 0,
+        last_error: null,
+        started_at: null,
+        finished_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       });
       toast.success(result.message);
     } catch (err) {
@@ -169,6 +200,42 @@ export default function PlacementGroupDetailPage() {
     }
   };
 
+  useEffect(() => {
+    if (!bulkPolling || !bulkMailJob?.job_id) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const progress = await getTpoMailJobProgress(bulkMailJob.job_id);
+        if (cancelled) return;
+        setBulkMailJob(progress);
+        if (progress.status === "completed" || progress.status === "failed") {
+          setBulkPolling(false);
+          if (progress.failure_count > 0) {
+            toast.warning(
+              `Bulk mail finished with ${progress.success_count} success and ${progress.failure_count} failure(s).`,
+            );
+          } else {
+            toast.success(`Bulk mail completed for ${progress.success_count} recipient(s).`);
+          }
+          return;
+        }
+        setTimeout(() => {
+          void poll();
+        }, 1000);
+      } catch (err) {
+        if (cancelled) return;
+        setBulkPolling(false);
+        toast.error(getApiErrorMessage(err));
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [bulkPolling, bulkMailJob?.job_id]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center text-slate-500">
@@ -213,11 +280,36 @@ export default function PlacementGroupDetailPage() {
             <Link href="/tpo/placement-groups">
               <Button variant="outline">Back to groups</Button>
             </Link>
-            <Button onClick={() => void sendBulkMail()} disabled={mailing}>
+            <Button onClick={() => void sendBulkMail()} disabled={mailing || bulkPolling}>
               Bulk mail
             </Button>
           </div>
         </div>
+
+        {bulkMailJob ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Bulk Mail Progress</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between text-sm text-slate-600">
+                <span>Status: {bulkStatusLabel}</span>
+                <span>
+                  {bulkMailJob.processed_count}/{bulkMailJob.total_recipients} processed
+                </span>
+              </div>
+              <Progress value={bulkMailJob.progress_percent} className="h-2 bg-slate-200" />
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <p>Success: {bulkMailJob.success_count}</p>
+                <p>Failed: {bulkMailJob.failure_count}</p>
+                <p>Progress: {Math.round(bulkMailJob.progress_percent)}%</p>
+              </div>
+              {bulkMailJob.last_error ? (
+                <p className="text-xs text-red-600">Last error: {bulkMailJob.last_error}</p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
@@ -315,7 +407,7 @@ export default function PlacementGroupDetailPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => void sendIndividualMail(member.student_id)}
-                        disabled={mailing}
+                        disabled={mailing || bulkPolling}
                       >
                         Mail
                       </Button>

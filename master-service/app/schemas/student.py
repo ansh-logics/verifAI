@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -37,7 +37,7 @@ class StudentData(BaseModel):
             raise ValueError("invalid email format")
         return v
 
-    @field_validator("name", "phone", "branch")
+    @field_validator("name", "branch")
     @classmethod
     def trim_required(cls, value: str) -> str:
         v = value.strip()
@@ -75,9 +75,17 @@ class RegisterRequest(BaseModel):
             raise ValueError("invalid email format")
         return v
 
-    @field_validator("name", "phone")
+    @field_validator("name")
     @classmethod
     def normalize_required_text(cls, value: str) -> str:
+        v = value.strip()
+        if not v:
+            raise ValueError("field cannot be blank")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
         v = value.strip()
         if not v:
             raise ValueError("field cannot be blank")
@@ -306,6 +314,79 @@ class TpoMailActionRequest(BaseModel):
 class TpoMailActionResponse(BaseModel):
     success: bool = True
     message: str
+    job_id: int | None = None
+    status: Literal["queued", "running", "completed", "failed"] | None = None
+    total_recipients: int | None = None
+    processed_count: int | None = None
+    success_count: int | None = None
+    failure_count: int | None = None
+
+
+class TpoMailJobProgressResponse(BaseModel):
+    job_id: int
+    group_id: int
+    mail_type: str
+    status: Literal["queued", "running", "completed", "failed"]
+    total_recipients: int
+    processed_count: int
+    success_count: int
+    failure_count: int
+    progress_percent: float
+    last_error: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TpoSettingsData(BaseModel):
+    display_name: str | None = Field(default=None, max_length=255)
+    contact_number: str | None = Field(default=None, max_length=32)
+    institute_name: str | None = Field(default=None, max_length=255)
+    sender_name: str | None = Field(default=None, max_length=255)
+    reply_to_email: str | None = Field(default=None, max_length=255)
+    default_timezone: str | None = Field(default=None, max_length=64)
+    stale_group_reminder_enabled: bool = True
+    daily_queue_summary_enabled: bool = True
+    placement_update_confirmation_enabled: bool = True
+
+    @field_validator(
+        "display_name",
+        "contact_number",
+        "institute_name",
+        "sender_name",
+        "default_timezone",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_text(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        v = str(value).strip()
+        return v or None
+
+    @field_validator("reply_to_email", mode="before")
+    @classmethod
+    def normalize_reply_to_email(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        v = str(value).strip().lower()
+        if not v:
+            return None
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("invalid reply_to_email format")
+        return v
+
+
+class TpoSettingsResponse(TpoSettingsData):
+    tpo_username: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class TpoPasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class TpoOverviewRecentPlacement(BaseModel):

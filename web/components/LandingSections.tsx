@@ -1,7 +1,54 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { CheckCircle2, LayoutDashboard, BrainCircuit, FileText } from "lucide-react";
+import {
+  getStoredEmail,
+  getStoredRollNo,
+  getStoredToken,
+  getStoredTpoToken,
+  getStoredTpoUsername,
+} from "@/lib/auth-storage";
+
+function formatUserLabel(email: string | null, rollNo: string | null): string {
+  if (rollNo) return rollNo;
+  if (!email) return "Student";
+  const local = email.split("@")[0]?.trim();
+  if (!local) return "Student";
+  return local.replace(/[._-]+/g, " ");
+}
 
 export function Navbar() {
+  const [studentLoggedIn, setStudentLoggedIn] = useState(false);
+  const [tpoLoggedIn, setTpoLoggedIn] = useState(false);
+  const [userLabel, setUserLabel] = useState("Student");
+
+  useEffect(() => {
+    const studentToken = getStoredToken();
+    const tpoToken = getStoredTpoToken();
+    const email = getStoredEmail();
+    const rollNo = getStoredRollNo();
+    const tpoUsername = getStoredTpoUsername();
+
+    if (tpoToken) {
+      setTpoLoggedIn(true);
+      setStudentLoggedIn(false);
+      setUserLabel(tpoUsername || "TPO");
+      return;
+    }
+
+    if (studentToken) {
+      setStudentLoggedIn(true);
+      setTpoLoggedIn(false);
+      setUserLabel(formatUserLabel(email, rollNo));
+      return;
+    }
+
+    setStudentLoggedIn(false);
+    setTpoLoggedIn(false);
+  }, []);
+
   return (
     <header className="fixed top-2 left-0 right-0 z-50 flex justify-between items-center px-8 h-16 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-3xl rounded-full mt-4 mx-auto w-[92%] max-w-7xl shadow-[0_4px_24px_rgba(0,0,0,0.02)] ring-1 ring-black/[0.04]">
       <div className="flex items-center gap-2">
@@ -9,13 +56,29 @@ export function Navbar() {
         <span className="text-xl font-bold tracking-tighter text-[#1d1d1f] dark:text-zinc-50 font-sans">VerifAI</span>
       </div>
       <nav className="hidden md:flex items-center gap-8">
-        <a className="font-sans tracking-tight text-sm font-semibold text-[#1d1d1f] dark:text-purple-400" href="#">Home</a>
-        <a className="font-sans tracking-tight text-sm font-semibold text-[#86868b] dark:text-zinc-400 hover:text-[#1d1d1f] transition-colors duration-300" href="#">Case Studies</a>
-        <a className="font-sans tracking-tight text-sm font-semibold text-[#86868b] dark:text-zinc-400 hover:text-[#1d1d1f] transition-colors duration-300" href="#">About Us</a>
+        <Link className="font-sans tracking-tight text-sm font-semibold text-[#1d1d1f] dark:text-purple-400" href="/#home">Home</Link>
+        <Link className="font-sans tracking-tight text-sm font-semibold text-[#86868b] dark:text-zinc-400 hover:text-[#1d1d1f] transition-colors duration-300" href="/#live-demo">Case Studies</Link>
+        <Link className="font-sans tracking-tight text-sm font-semibold text-[#86868b] dark:text-zinc-400 hover:text-[#1d1d1f] transition-colors duration-300" href="/#features">About Us</Link>
       </nav>
       <div className="flex items-center gap-4">
-        <button className="font-sans tracking-tight text-sm font-semibold text-[#86868b] hover:text-[#1d1d1f] transition-colors duration-300 hidden sm:block">Login</button>
-        <button className="bg-[#1d1d1f] text-white font-sans tracking-tight text-sm font-semibold px-6 py-2 rounded-full hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-md">Sign Up</button>
+        {studentLoggedIn || tpoLoggedIn ? (
+          <>
+            <span className="hidden sm:block font-sans tracking-tight text-sm font-semibold text-[#86868b]">
+              {userLabel}
+            </span>
+            <Link
+              className="bg-[#1d1d1f] text-white font-sans tracking-tight text-sm font-semibold px-6 py-2 rounded-full hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-md"
+              href={tpoLoggedIn ? "/tpo" : "/profile"}
+            >
+              {tpoLoggedIn ? "Open TPO" : "Open Profile"}
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link className="font-sans tracking-tight text-sm font-semibold text-[#86868b] hover:text-[#1d1d1f] transition-colors duration-300 hidden sm:block" href="/login">Login</Link>
+            <Link className="bg-[#1d1d1f] text-white font-sans tracking-tight text-sm font-semibold px-6 py-2 rounded-full hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-md" href="/register">Sign Up</Link>
+          </>
+        )}
       </div>
     </header>
   );
@@ -23,7 +86,7 @@ export function Navbar() {
 
 export function Features() {
   return (
-    <section className="space-y-16 py-24 px-6 sm:px-12 max-w-7xl mx-auto w-full bg-[#f5f5f7]">
+    <section id="features" className="space-y-16 py-24 px-6 sm:px-12 max-w-7xl mx-auto w-full bg-[#f5f5f7]">
       <div className="text-center space-y-4 max-w-3xl mx-auto">
         <h2 className="text-4xl sm:text-5xl font-bold tracking-tighter text-[#1d1d1f]">Intelligence at every step.</h2>
         <p className="text-[#86868b] font-medium text-xl tracking-tight">Designed to bring clarity and precision to the complex placement process.</p>
@@ -92,9 +155,9 @@ export function Features() {
                </div>
                <h3 className="text-2xl font-bold tracking-tight text-[#1d1d1f]">TPO Dashboard</h3>
                <p className="text-[#86868b] text-base leading-relaxed font-medium max-w-lg">A centralized command center for Training and Placement Officers. Track overall campus performance, upcoming drives, and student readiness metrics at a glance.</p>
-               <button className="mt-6 bg-white text-[#1d1d1f] px-8 py-3 rounded-full font-semibold ring-1 ring-black/[0.06] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:bg-zinc-50 hover:scale-[1.02] active:scale-[0.98] transition-transform duration-300">
+              <Link href="/tpo" className="inline-block mt-6 bg-white text-[#1d1d1f] px-8 py-3 rounded-full font-semibold ring-1 ring-black/[0.06] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:bg-zinc-50 hover:scale-[1.02] active:scale-[0.98] transition-transform duration-300">
                  View Dashboard
-               </button>
+               </Link>
              </div>
              <div className="flex-[1.5] w-full bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-black/[0.04] overflow-hidden relative hover:scale-[1.02] transition-transform duration-500">
                <div className="flex justify-between items-center mb-6">
@@ -142,7 +205,7 @@ export function Features() {
 
 export function LiveUseCase() {
   return (
-    <section className="max-w-6xl mx-auto w-full my-12 bg-white rounded-[3rem] p-16 ring-1 ring-black/[0.04] shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
+    <section id="live-demo" className="max-w-6xl mx-auto w-full my-12 bg-white rounded-[3rem] p-16 ring-1 ring-black/[0.04] shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
       <div className="text-center mb-16 relative z-10">
         <span className="text-[#86868b] font-bold tracking-widest uppercase text-xs mb-3 block">Live Demo</span>
         <h2 className="text-4xl sm:text-5xl font-bold tracking-tighter text-[#1d1d1f]">See it in action.</h2>
@@ -190,16 +253,16 @@ export function LiveUseCase() {
 
 export function Footer() {
   return (
-    <footer className="w-full py-20 px-12 flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto bg-[#f5f5f7] text-purple-600 font-sans text-xs uppercase tracking-widest rounded-t-[3rem] opacity-90 hover:opacity-100 border-t border-zinc-200">
+    <footer id="footer" className="w-full py-20 px-12 flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto bg-[#f5f5f7] text-purple-600 font-sans text-xs uppercase tracking-widest rounded-t-[3rem] opacity-90 hover:opacity-100 border-t border-zinc-200">
       <div className="flex items-center gap-2 mb-8 md:flex-row md:mb-0">
         <BrainCircuit className="text-purple-600 w-6 h-6" />
         <span className="text-lg font-bold text-zinc-900 tracking-normal normal-case">VerifAI</span>
       </div>
       <div className="flex flex-wrap justify-center gap-8 mb-8 md:mb-0 font-semibold">
-        <a className="text-zinc-500 hover:text-purple-600 transition-colors" href="#">Product</a>
-        <a className="text-zinc-500 hover:text-purple-600 transition-colors" href="#">Intelligence</a>
-        <a className="text-zinc-500 hover:text-purple-600 transition-colors" href="#">Privacy</a>
-        <a className="text-zinc-500 hover:text-purple-600 transition-colors" href="#">Terms</a>
+        <Link className="text-zinc-500 hover:text-purple-600 transition-colors" href="/#features">Product</Link>
+        <Link className="text-zinc-500 hover:text-purple-600 transition-colors" href="/#live-demo">Intelligence</Link>
+        <Link className="text-zinc-500 hover:text-purple-600 transition-colors" href="/register">Privacy</Link>
+        <Link className="text-zinc-500 hover:text-purple-600 transition-colors" href="/login">Terms</Link>
       </div>
       <div className="text-zinc-400 normal-case tracking-normal text-sm font-medium">
          © 2024 VerifAI Intelligence. All rights reserved.

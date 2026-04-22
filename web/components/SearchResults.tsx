@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function scoreBadge(score: number) {
   if (score >= 80) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-300" };
@@ -177,6 +178,48 @@ export default function SearchPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Skeleton Loading State */}
+      {isLoading && (
+        <Card className="border-2 border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 hover:bg-slate-50">
+                  <TableHead className="font-semibold text-slate-700">Rank</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Name</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Match Score</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Overall Score</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Matched Terms</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Quality</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="border-t border-slate-200">
+                    <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
+                    <TableCell>
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-44" />
+                      </div>
+                    </TableCell>
+                    <TableCell><Skeleton className="h-6 w-14 rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-14 rounded-full" /></TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                      </div>
+                    </TableCell>
+                    <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
 
       {/* Results */}
       <AnimatePresence>

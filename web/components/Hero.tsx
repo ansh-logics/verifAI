@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { Search, Upload, ArrowRight, Sparkles, CheckCircle2, FileText, BrainCircuit, ListChecks } from "lucide-react";
 
@@ -69,7 +70,8 @@ export function Hero() {
   }, []);
 
   return (
-    <div 
+    <div
+      id="home"
       className="relative min-h-[100vh] w-full bg-[#f5f5f7] overflow-hidden flex flex-col items-center pt-48 pb-12 font-sans tracking-tight"
       onMouseMove={handleMouseMove}
     >
@@ -93,12 +95,12 @@ export function Hero() {
           </h1>
           
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button className="bg-[#1d1d1f] text-white px-8 py-4 rounded-full font-semibold text-lg transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-[0_8px_20px_rgba(0,0,0,0.12)]">
+            <Link href="/tpo/login" className="bg-[#1d1d1f] text-white px-8 py-4 rounded-full font-semibold text-lg transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-[0_8px_20px_rgba(0,0,0,0.12)]">
               For Placement Cells
-            </button>
-            <button className="bg-white text-[#1d1d1f] ring-1 ring-black/[0.06] hover:bg-zinc-50 px-8 py-4 rounded-full font-semibold text-lg transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
+            </Link>
+            <Link href="/login" className="bg-white text-[#1d1d1f] ring-1 ring-black/[0.06] hover:bg-zinc-50 px-8 py-4 rounded-full font-semibold text-lg transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
               For Students
-            </button>
+            </Link>
           </div>
         </motion.div>
 
@@ -123,7 +125,7 @@ export function Hero() {
               </div>
               <motion.div layout className="flex-1 px-4 text-zinc-700 text-[22px] font-medium tracking-tight whitespace-nowrap overflow-hidden">
                 {phase === 0 ? (
-                  <span className="text-[#86868b] font-normal">Paste a JD or ask "Find top React students"</span>
+                  <span className="text-[#86868b] font-normal">Paste a JD or ask &quot;Find top React students&quot;</span>
                 ) : (
                   <span>
                     {typedText}
@@ -289,12 +291,16 @@ export function Hero() {
                           </motion.div>
                        ))}
                     </div>
-                    <motion.button
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 2.2 }}
-                      className="w-full mt-6 bg-zinc-950 text-white rounded-2xl py-4 font-semibold text-[15px] hover:bg-zinc-800 transition-colors"
                     >
-                      View Dashboard
-                    </motion.button>
+                      <Link
+                        href="/tpo"
+                        className="block w-full mt-6 bg-zinc-950 text-white rounded-2xl py-4 text-center font-semibold text-[15px] hover:bg-zinc-800 transition-colors"
+                      >
+                        View Dashboard
+                      </Link>
+                    </motion.div>
                   </motion.div>
                 </div>
               </motion.div>

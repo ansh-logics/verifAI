@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, UploadCloud } from "lucide-react";
+import { Code2, FileText, Loader2, UploadCloud, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -32,7 +32,6 @@ import type {
   StudentProfileDetail,
   StudentProfilePayload,
 } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -51,6 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const BRANCHES: BranchOption[] = [
   "CSE",
@@ -172,7 +172,10 @@ export default function DashboardPage() {
       if (rawDraft) {
         try {
           const draft = JSON.parse(rawDraft) as DashboardDraftData;
-          setFormData((prev) => ({ ...prev, ...draft }));
+          setFormData((prev) => ({
+            ...prev,
+            ...draft,
+          }));
         } catch {
           // Ignore malformed drafts and continue with server/account prefill.
         }
@@ -261,6 +264,8 @@ export default function DashboardPage() {
 
   const currentResumeFileName = formData.resumeFile?.name || existingResumeFileName;
   const currentMarksheetFileName = formData.marksheetFile?.name || existingMarksheetFileName;
+  const surfaceCardClass = "rounded-3xl border border-slate-200/60 bg-white shadow-sm";
+  const inputClass = "h-11 rounded-xl border-slate-200 bg-white";
 
   const setField = <K extends keyof FormDataState>(
     key: K,
@@ -540,19 +545,25 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="min-h-screen px-4 py-10 md:px-6">
-      <div className="mx-auto w-full max-w-4xl space-y-6">
-        <header className="space-y-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">VerifAI Dashboard</h1>
+    <main className="min-h-screen bg-[#f8f9fa] px-4 py-10 md:px-6">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        <header className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Student Workspace</p>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-900">VerifAI Dashboard</h1>
+            </div>
             <Link
               href="/profile"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+              )}
             >
               View profile
             </Link>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-600">
             Analyze your profile, review details, and save your student profile.
           </p>
         </header>
@@ -565,94 +576,125 @@ export default function DashboardPage() {
           </Card>
         ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>File Upload</CardTitle>
-            <CardDescription>
-              Review current files and update them from the popup.
+        <Card className={surfaceCardClass}>
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2 text-base text-slate-900">
+              <FileText className="h-4 w-4 text-blue-600" />
+              File Uploads
+            </CardTitle>
+            <CardDescription className="text-slate-500">
+              Keep documents updated so analysis stays accurate.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-md border p-3">
-                <p className="text-sm font-medium">Resume (PDF/DOCX)</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">Resume (PDF/DOCX)</p>
+                  {currentResumeFileName ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-green-50 text-green-700 px-2 py-1 rounded-md ring-1 ring-green-100">Uploaded</span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded-md ring-1 ring-slate-200">Missing</span>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
                   {currentResumeFileName || "No file uploaded"}
                 </p>
               </div>
-              <div className="rounded-md border p-3">
-                <p className="text-sm font-medium">Marksheet (PDF)</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">Marksheet (PDF)</p>
+                  {currentMarksheetFileName ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-green-50 text-green-700 px-2 py-1 rounded-md ring-1 ring-green-100">Uploaded</span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded-md ring-1 ring-slate-200">Missing</span>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
                   {currentMarksheetFileName || "No file uploaded"}
                 </p>
               </div>
             </div>
-            <Button type="button" variant="outline" onClick={openFileDialog}>
+            <Button type="button" onClick={openFileDialog} className="w-full bg-blue-600 text-white hover:bg-blue-700 md:w-auto">
               Update Files
             </Button>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Coding Profiles</CardTitle>
-            <CardDescription>
+        <Card className={surfaceCardClass}>
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2 text-base text-slate-900">
+              <Code2 className="h-4 w-4 text-blue-600" />
+              Coding Profiles
+            </CardTitle>
+            <CardDescription className="text-slate-500">
               Provide coding profile usernames for analysis.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
+          <CardContent className="grid gap-4 md:grid-cols-3 pt-4">
             <Input
               placeholder="GitHub username"
               value={formData.githubUsername}
               onChange={(e) => setField("githubUsername", e.target.value)}
+              className={inputClass}
             />
             <Input
               placeholder="LeetCode username"
               value={formData.leetcodeUsername}
               onChange={(e) => setField("leetcodeUsername", e.target.value)}
+              className={inputClass}
             />
             <Input
               placeholder="Codeforces username (optional)"
               value={formData.codeforcesUsername}
               onChange={(e) => setField("codeforcesUsername", e.target.value)}
+              className={inputClass}
             />
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>
+        <Card className={surfaceCardClass}>
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2 text-base text-slate-900">
+              <UserRound className="h-4 w-4 text-blue-600" />
+              Basic Information
+            </CardTitle>
+            <CardDescription className="text-slate-500">
               Auto-filled after analysis and editable before saving.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
+          <CardContent className="grid gap-4 md:grid-cols-2 pt-4">
             <Input
               placeholder="Name"
               value={formData.name}
               onChange={(e) => setField("name", e.target.value)}
+              className={inputClass}
             />
             <Input
               placeholder="Email"
               type="email"
               value={formData.email}
               onChange={(e) => setField("email", e.target.value)}
+              className={inputClass}
             />
             <Input
               placeholder="AKTU roll no"
               value={formData.rollNo}
               onChange={(e) => setField("rollNo", e.target.value)}
+              className={inputClass}
             />
             <Input
               placeholder="Phone"
               value={formData.phone}
               onChange={(e) => setField("phone", e.target.value)}
+              inputMode="tel"
+              className={inputClass}
             />
             <Select
               value={formData.branch}
               onValueChange={(value) => setField("branch", value as BranchOption)}
             >
-              <SelectTrigger>
+              <SelectTrigger className={inputClass}>
                 <SelectValue placeholder="Select branch" />
               </SelectTrigger>
               <SelectContent>
@@ -667,13 +709,18 @@ export default function DashboardPage() {
               placeholder="CGPA"
               value={formData.cgpa}
               onChange={(e) => setField("cgpa", e.target.value)}
+              className={inputClass}
             />
           </CardContent>
         </Card>
 
-        <div className="space-y-2">
+        <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap gap-3">
-            <Button onClick={handleAnalyze} disabled={analyzing || saving}>
+            <Button
+              onClick={handleAnalyze}
+              disabled={analyzing || saving}
+              className="bg-blue-600 text-white hover:bg-blue-700"
+            >
               {analyzing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -690,6 +737,7 @@ export default function DashboardPage() {
               variant="secondary"
               onClick={handleSave}
               disabled={saving || analyzing}
+              className="bg-slate-100 text-slate-800 hover:bg-slate-200"
             >
               {saving ? (
                 <>
@@ -702,84 +750,138 @@ export default function DashboardPage() {
             </Button>
           </div>
           {hasPendingReanalysis ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-slate-600">
               Save will run analysis for changed inputs before storing your profile.
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-slate-600">
               No analysis changes pending. Save will store profile details directly.
             </p>
           )}
         </div>
 
-        {analysisResult ? (
+        {analyzing ? (
           <section className="space-y-4">
             <h2 className="text-xl font-semibold tracking-tight">Analysis Result</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              <Card>
+              <Card className={surfaceCardClass}>
                 <CardHeader>
-                  <CardTitle className="text-base">Skills</CardTitle>
+                  <Skeleton className="h-5 w-16" />
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className={surfaceCardClass}>
+                <CardHeader>
+                  <Skeleton className="h-5 w-16" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-6 w-32" />
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className={surfaceCardClass}>
+                <CardHeader>
+                  <Skeleton className="h-5 w-24" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-32" />
+                </CardContent>
+              </Card>
+
+              <Card className={surfaceCardClass}>
+                <CardHeader>
+                  <Skeleton className="h-5 w-28" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-2 w-full" />
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        ) : analysisResult ? (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold tracking-tight">Analysis Result</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className={surfaceCardClass}>
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="text-base text-slate-900">Skills</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2 pt-4">
                   {analysisResult.skills.length > 0 ? (
                     analysisResult.skills.map((skill) => (
-                      <Badge key={skill} variant="secondary">
+                      <span key={skill} className="bg-slate-100 text-slate-700 text-xs px-3 py-1.5 rounded-md font-medium">
                         {skill}
-                      </Badge>
+                      </span>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">No skills extracted.</p>
+                    <p className="text-sm text-slate-500">No skills extracted.</p>
                   )}
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Coding</CardTitle>
+              <Card className={surfaceCardClass}>
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="text-base text-slate-900">Coding</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Persona</span>
-                    <Badge>{analysisResult.coding.persona || "N/A"}</Badge>
+                <CardContent className="space-y-3 text-sm pt-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Persona</span>
+                    <span className="font-medium text-slate-900">{analysisResult.coding.persona || "N/A"}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>GitHub Repos: {githubStats.repos}</div>
-                    <div>Commits (30d): {githubStats.commits}</div>
-                    <div>Solved: {leetcodeStats.totalSolved}</div>
+                  <div className="grid grid-cols-2 gap-2 text-slate-700">
+                    <div>GitHub Repos: <span className="font-medium text-slate-900">{githubStats.repos}</span></div>
+                    <div>Commits (30d): <span className="font-medium text-slate-900">{githubStats.commits}</span></div>
+                    <div>Solved: <span className="font-medium text-slate-900">{leetcodeStats.totalSolved}</span></div>
                     <div>
-                      E/M/H: {leetcodeStats.easy}/{leetcodeStats.medium}/
-                      {leetcodeStats.hard}
+                      E/M/H: <span className="font-medium text-slate-900">{leetcodeStats.easy}/{leetcodeStats.medium}/
+                      {leetcodeStats.hard}</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Academics</CardTitle>
+              <Card className={surfaceCardClass}>
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="text-base text-slate-900">Academics</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div>CGPA: {analysisResult.academics.cgpa ?? "N/A"}</div>
-                  <div className="flex items-center gap-2">
-                    Status:
+                <CardContent className="space-y-3 text-sm pt-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">CGPA</span>
+                    <span className="font-medium text-slate-900">{analysisResult.academics.cgpa ?? "N/A"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Status</span>
                     {analysisResult.academics.verified ? (
-                      <Badge>Verified</Badge>
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-green-50 text-green-700 px-2 py-1 rounded-md ring-1 ring-green-100">Verified</span>
                     ) : (
-                      <Badge variant="secondary">Unverified</Badge>
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded-md ring-1 ring-slate-200">Unverified</span>
                     )}
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Overall Score</CardTitle>
+              <Card className={surfaceCardClass}>
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="text-base text-slate-900">Overall Score</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-2xl font-semibold">
-                    {analysisResult.overall_score.toFixed(1)} / 100
+                <CardContent className="space-y-3 pt-4">
+                  <div className="text-4xl font-semibold tracking-tight text-slate-900">
+                    {analysisResult.overall_score.toFixed(1)} <span className="text-xl text-slate-400 font-medium">/ 100</span>
                   </div>
-                  <Progress value={analysisResult.overall_score} />
+                  <Progress value={analysisResult.overall_score} className="h-2" />
                 </CardContent>
               </Card>
             </div>
@@ -789,15 +891,22 @@ export default function DashboardPage() {
 
       {isFileDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-lg border bg-background p-6 shadow-lg">
+          <div className="w-full max-w-xl rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold">Update files</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Replace resume or marksheet. You can update one or both.
             </p>
 
             <div className="mt-5 space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Resume (PDF/DOCX)</label>
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-semibold text-slate-900">Resume (PDF/DOCX)</label>
+                  {pendingResumeFile?.name || currentResumeFileName ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-green-50 text-green-700 px-2 py-1 rounded-md ring-1 ring-green-100">Ready</span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded-md ring-1 ring-slate-200">Missing</span>
+                  )}
+                </div>
                 <Input
                   type="file"
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -808,8 +917,15 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Marksheet (PDF)</label>
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-semibold text-slate-900">Marksheet (PDF)</label>
+                  {pendingMarksheetFile?.name || currentMarksheetFileName ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-green-50 text-green-700 px-2 py-1 rounded-md ring-1 ring-green-100">Ready</span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded-md ring-1 ring-slate-200">Missing</span>
+                  )}
+                </div>
                 <Input
                   type="file"
                   accept=".pdf,application/pdf"
@@ -825,7 +941,9 @@ export default function DashboardPage() {
               <Button variant="outline" onClick={closeFileDialog}>
                 Cancel
               </Button>
-              <Button onClick={saveFileDialogChanges}>Save file changes</Button>
+              <Button onClick={saveFileDialogChanges} className="bg-blue-600 text-white hover:bg-blue-700">
+                Save file changes
+              </Button>
             </div>
           </div>
         </div>

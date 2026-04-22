@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import smtplib
 from email.message import EmailMessage
+from typing import Union
 
 from app.config import Settings
 
@@ -30,9 +31,17 @@ class MailService:
         msg["Subject"] = subject
         msg.set_content(body)
 
-        with smtplib.SMTP(self.settings.smtp_host, self.settings.smtp_port, timeout=30) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
+        port = int(self.settings.smtp_port)
+        use_ssl = port == 465
+
+        smtp_cls: Union[type[smtplib.SMTP], type[smtplib.SMTP_SSL]]
+        smtp_cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+
+        with smtp_cls(self.settings.smtp_host, port, timeout=30) as server:
+            if not use_ssl:
+                server.ehlo()
+                if server.has_extn("starttls"):
+                    server.starttls()
+                    server.ehlo()
             server.login(self.settings.smtp_username, self.settings.smtp_password)
             server.send_message(msg)

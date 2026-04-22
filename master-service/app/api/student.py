@@ -2,17 +2,27 @@ from __future__ import annotations
 
 import logging
 import json
+import smtplib
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.config import get_settings
-from app.database.database import get_db
-from app.database.models import PlacementRecord, RawUpload, Student, StudentProfile, TpoAnalysisGroup
+from app.database.database import SessionLocal, get_db
+from app.database.models import (
+    PlacementRecord,
+    RawUpload,
+    Student,
+    StudentProfile,
+    TpoAnalysisGroup,
+    TpoMailJob,
+    TpoSettings,
+)
 from app.dependencies.auth import get_current_student_id, get_current_tpo_user, get_optional_student_id
 from app.schemas.student import (
     AuthTokenResponse,
@@ -32,8 +42,12 @@ from app.schemas.student import (
     TpoGroupResponse,
     TpoOverviewRecentPlacement,
     TpoOverviewResponse,
+    TpoPasswordChangeRequest,
+    TpoSettingsData,
+    TpoSettingsResponse,
     TpoMailActionRequest,
     TpoMailActionResponse,
+    TpoMailJobProgressResponse,
     TpoLoginRequest,
 )
 from app.services.auth_service import AuthService
@@ -50,6 +64,31 @@ router = APIRouter(prefix="/student", tags=["student"])
 ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx"}
 ALLOWED_MARKSHEET_EXTENSIONS = {".pdf"}
 MAX_FILE_BYTES = 8 * 1024 * 1024
+def _upsert_tpo_settings_defaults(db: Session, tpo_username: str) -> TpoSettings:
+    settings = db.query(TpoSettings).filter(TpoSettings.tpo_username == tpo_username).one_or_none()
+    if settings is not None:
+        return settings
+    settings = TpoSettings(
+        tpo_username=tpo_username,
+        display_name=tpo_username,
+        sender_name=tpo_username,
+        default_timezone="Asia/Kolkata",
+    )
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+def _validate_new_password(new_password: str) -> None:
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters.")
+    has_alpha = any(ch.isalpha() for ch in new_password)
+    has_digit = any(ch.isdigit() for ch in new_password)
+    if not (has_alpha and has_digit):
+        raise HTTPException(status_code=400, detail="New password must include both letters and numbers.")
+
+
 
 
 def _first_non_empty_str(*values: object) -> str | None:
@@ -524,6 +563,89 @@ def get_tpo_overview(
     )
 
 
+@router.get("/tpo/settings", response_model=TpoSettingsResponse)
+def get_tpo_settings(
+    db: Session = Depends(get_db),
+    tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoSettingsResponse:
+    settings_row = _upsert_tpo_settings_defaults(db, tpo_user)
+    return TpoSettingsResponse(
+        tpo_username=settings_row.tpo_username,
+        display_name=settings_row.display_name,
+        contact_number=settings_row.contact_number,
+        institute_name=settings_row.institute_name,
+        sender_name=settings_row.sender_name,
+        reply_to_email=settings_row.reply_to_email,
+        default_timezone=settings_row.default_timezone,
+        stale_group_reminder_enabled=settings_row.stale_group_reminder_enabled,
+        daily_queue_summary_enabled=settings_row.daily_queue_summary_enabled,
+        placement_update_confirmation_enabled=settings_row.placement_update_confirmation_enabled,
+        created_at=settings_row.created_at,
+        updated_at=settings_row.updated_at,
+    )
+
+
+@router.put("/tpo/settings", response_model=TpoSettingsResponse)
+def update_tpo_settings(
+    payload: TpoSettingsData,
+    db: Session = Depends(get_db),
+    tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoSettingsResponse:
+    settings_row = _upsert_tpo_settings_defaults(db, tpo_user)
+    settings_row.display_name = payload.display_name
+    settings_row.contact_number = payload.contact_number
+    settings_row.institute_name = payload.institute_name
+    settings_row.sender_name = payload.sender_name
+    settings_row.reply_to_email = payload.reply_to_email
+    settings_row.default_timezone = payload.default_timezone
+    settings_row.stale_group_reminder_enabled = payload.stale_group_reminder_enabled
+    settings_row.daily_queue_summary_enabled = payload.daily_queue_summary_enabled
+    settings_row.placement_update_confirmation_enabled = payload.placement_update_confirmation_enabled
+    db.add(settings_row)
+    db.commit()
+    db.refresh(settings_row)
+    return TpoSettingsResponse(
+        tpo_username=settings_row.tpo_username,
+        display_name=settings_row.display_name,
+        contact_number=settings_row.contact_number,
+        institute_name=settings_row.institute_name,
+        sender_name=settings_row.sender_name,
+        reply_to_email=settings_row.reply_to_email,
+        default_timezone=settings_row.default_timezone,
+        stale_group_reminder_enabled=settings_row.stale_group_reminder_enabled,
+        daily_queue_summary_enabled=settings_row.daily_queue_summary_enabled,
+        placement_update_confirmation_enabled=settings_row.placement_update_confirmation_enabled,
+        created_at=settings_row.created_at,
+        updated_at=settings_row.updated_at,
+    )
+
+
+@router.post("/tpo/settings/change-password", response_model=TpoMailActionResponse)
+def change_tpo_password(
+    payload: TpoPasswordChangeRequest,
+    db: Session = Depends(get_db),
+    tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoMailActionResponse:
+    settings = get_settings()
+    auth_service = AuthService(settings)
+    settings_row = _upsert_tpo_settings_defaults(db, tpo_user)
+    stored_hash = settings_row.tpo_password_hash
+    current_matches = (
+        auth_service.verify_password(payload.current_password, stored_hash)
+        if stored_hash
+        else payload.current_password == settings.tpo_password
+    )
+    if not current_matches:
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password.")
+    _validate_new_password(payload.new_password)
+    settings_row.tpo_password_hash = auth_service.hash_password(payload.new_password)
+    db.add(settings_row)
+    db.commit()
+    return TpoMailActionResponse(message="TPO password updated successfully.")
+
+
 @router.delete("/tpo/groups/{group_id}", response_model=TpoMailActionResponse)
 def delete_tpo_group(
     group_id: int,
@@ -557,11 +679,169 @@ def mark_placement(
     )
 
 
+def _optional_note_block(additional_note: str | None) -> str:
+    note = (additional_note or "").strip()
+    if not note:
+        return ""
+    return f"\nAdditional Note:\n{note}\n"
+
+
+def _render_subject_and_body(payload: TpoMailActionRequest, student: Student, group: TpoAnalysisGroup) -> tuple[str, str]:
+    company = (group.company_name or "the company").strip()
+    role = (group.role_type or "job opportunity").strip()
+    note_block = _optional_note_block(payload.additional_note)
+
+    if payload.mail_type == "shortlist_notice":
+        subject = (payload.subject or f"Shortlist Update: {company} {role.title()}").strip()
+        body = (
+            f"Dear {student.name},\n\n"
+            f"We are pleased to inform you that you have been shortlisted for the {role} role at {company}.\n\n"
+            "Details:\n"
+            f"- Company: {company}\n"
+            f"- Role: {role}\n"
+            "- Status: Shortlisted for next stage\n"
+            f"{note_block}\n"
+            "Please keep checking the placement portal and your email for further updates.\n\n"
+            "Best regards,\n"
+            "Training and Placement Office\n"
+            "VerifAI"
+        ).strip()
+        return subject, body
+
+    if payload.mail_type == "prep_topics":
+        topics = [topic.strip() for topic in payload.prep_topics if topic.strip()]
+        if not topics:
+            raise HTTPException(status_code=400, detail="prep_topics requires at least one topic.")
+        subject = (payload.subject or f"Preparation Guide: {company} {role.title()}").strip()
+        topics_text = "\n".join(f"- {topic}" for topic in topics)
+        body = (
+            f"Dear {student.name},\n\n"
+            f"As part of the upcoming selection process for {company}, please prepare the following topics.\n\n"
+            "Preparation Topics:\n"
+            f"{topics_text}\n"
+            f"{note_block}\n"
+            "Please revise these topics thoroughly before the next round.\n\n"
+            "Best regards,\n"
+            "Training and Placement Office\n"
+            "VerifAI"
+        ).strip()
+        return subject, body
+
+    if payload.mail_type == "interview_schedule":
+        if not payload.interview_date or not payload.interview_time_start or not payload.interview_time_end:
+            raise HTTPException(
+                status_code=400,
+                detail="interview_schedule requires interview_date, interview_time_start, and interview_time_end.",
+            )
+        tz = group.interview_timezone or "local time"
+        subject = (payload.subject or f"Interview Schedule: {company}").strip()
+        body = (
+            f"Dear {student.name},\n\n"
+            "Your interview has been scheduled. Please find the details below:\n\n"
+            "Interview Details:\n"
+            f"- Company: {company}\n"
+            f"- Role: {role}\n"
+            f"- Date: {payload.interview_date}\n"
+            f"- Time: {payload.interview_time_start} to {payload.interview_time_end}\n"
+            f"- Timezone: {tz}\n"
+            f"{note_block}\n"
+            "Please join/report on time and keep your required documents ready.\n\n"
+            "Best regards,\n"
+            "Training and Placement Office\n"
+            "VerifAI"
+        ).strip()
+        return subject, body
+
+    if payload.mail_type == "process_custom":
+        if not payload.subject or not payload.body:
+            raise HTTPException(status_code=400, detail="process_custom requires subject and body.")
+        subject = payload.subject.strip()
+        body = payload.body.strip().replace("{student_name}", student.name).replace("{company_name}", company)
+        return subject, body
+
+    raise HTTPException(status_code=400, detail="Unsupported mail type.")
+
+
+def _mail_job_to_progress_response(job: TpoMailJob) -> TpoMailJobProgressResponse:
+    status = job.status if job.status in {"queued", "running", "completed", "failed"} else "failed"
+    progress = 0.0
+    if job.total_recipients > 0:
+        progress = round((job.processed_count / job.total_recipients) * 100, 2)
+    return TpoMailJobProgressResponse(
+        job_id=job.id,
+        group_id=job.group_id,
+        mail_type=job.mail_type,
+        status=status,
+        total_recipients=job.total_recipients,
+        processed_count=job.processed_count,
+        success_count=job.success_count,
+        failure_count=job.failure_count,
+        progress_percent=progress,
+        last_error=job.last_error,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
+
+
+def _process_bulk_mail_job(job_id: int, payload_dict: dict[str, object]) -> None:
+    db = SessionLocal()
+    try:
+        job = db.query(TpoMailJob).filter(TpoMailJob.id == job_id).one_or_none()
+        if job is None:
+            return
+        group = db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == job.group_id).one_or_none()
+        if group is None:
+            job.status = "failed"
+            job.last_error = "Group no longer exists."
+            job.finished_at = datetime.now(timezone.utc)
+            job.updated_at = datetime.now(timezone.utc)
+            db.add(job)
+            db.commit()
+            return
+        payload = TpoMailActionRequest.model_validate(payload_dict)
+        members = [member.student for member in group.members if member.student is not None]
+        if payload.mode == "individual" and payload.student_id is not None:
+            members = [student for student in members if student.id == payload.student_id]
+
+        settings = get_settings()
+        mailer = MailService(settings)
+        job.status = "running"
+        job.started_at = datetime.now(timezone.utc)
+        job.updated_at = datetime.now(timezone.utc)
+        db.add(job)
+        db.commit()
+
+        for student in members:
+            try:
+                subject, body = _render_subject_and_body(payload, student, group)
+                mailer.send_email(to_email=student.email, subject=subject, body=body)
+                job.success_count += 1
+            except (HTTPException, smtplib.SMTPException, OSError, ValueError) as exc:
+                job.failure_count += 1
+                job.last_error = f"{student.email}: {exc}"
+            finally:
+                job.processed_count += 1
+                job.updated_at = datetime.now(timezone.utc)
+                db.add(job)
+                db.commit()
+
+        job.status = "completed" if job.failure_count == 0 else "failed"
+        job.finished_at = datetime.now(timezone.utc)
+        job.updated_at = datetime.now(timezone.utc)
+        db.add(job)
+        db.commit()
+    finally:
+        db.close()
+
+
 @router.post("/tpo/mail", response_model=TpoMailActionResponse)
 def trigger_tpo_mail_action(
     payload: TpoMailActionRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    _tpo_user: str = Depends(get_current_tpo_user),
+    tpo_user: str = Depends(get_current_tpo_user),
 ) -> TpoMailActionResponse:
     group = db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == payload.group_id).one_or_none()
     if group is None:
@@ -575,65 +855,55 @@ def trigger_tpo_mail_action(
     if not members:
         raise HTTPException(status_code=400, detail="No recipients found.")
 
-    def _render_subject_and_body(student: Student) -> tuple[str, str]:
-        company = group.company_name or "the company"
-        role = group.role_type or "job"
-        mail_type = payload.mail_type
-        if mail_type == "shortlist_notice":
-            subject = payload.subject or f"Shortlisting Update - {company}"
-            body = (
-                f"Hi {student.name},\n\n"
-                f"You have been shortlisted for the {role} opportunity with {company}.\n"
-                f"{(payload.additional_note or '').strip()}\n\n"
-                "Regards,\nTPO Team"
-            ).strip()
-            return subject, body
-        if mail_type == "prep_topics":
-            topics = [topic.strip() for topic in payload.prep_topics if topic.strip()]
-            if not topics:
-                raise HTTPException(status_code=400, detail="prep_topics requires at least one topic.")
-            subject = payload.subject or f"Preparation Topics - {company}"
-            topics_text = "\n".join(f"- {topic}" for topic in topics)
-            body = (
-                f"Hi {student.name},\n\n"
-                f"Please prepare the following topics for the {role} process with {company}:\n"
-                f"{topics_text}\n\n"
-                f"{(payload.additional_note or '').strip()}\n\n"
-                "Regards,\nTPO Team"
-            ).strip()
-            return subject, body
-        if mail_type == "interview_schedule":
-            if not payload.interview_date or not payload.interview_time_start or not payload.interview_time_end:
-                raise HTTPException(
-                    status_code=400,
-                    detail="interview_schedule requires interview_date, interview_time_start, and interview_time_end.",
-                )
-            subject = payload.subject or f"Interview Schedule - {company}"
-            tz = group.interview_timezone or "local time"
-            body = (
-                f"Hi {student.name},\n\n"
-                f"Your interview for {company} is scheduled on {payload.interview_date} "
-                f"from {payload.interview_time_start} to {payload.interview_time_end} ({tz}).\n"
-                f"{(payload.additional_note or '').strip()}\n\n"
-                "Regards,\nTPO Team"
-            ).strip()
-            return subject, body
-        if mail_type == "process_custom":
-            if not payload.subject or not payload.body:
-                raise HTTPException(status_code=400, detail="process_custom requires subject and body.")
-            body = payload.body.replace("{student_name}", student.name).replace("{company_name}", company)
-            return payload.subject, body
-        raise HTTPException(status_code=400, detail="Unsupported mail type.")
+    if payload.mode == "bulk":
+        job = TpoMailJob(
+            group_id=group.id,
+            requested_by=tpo_user,
+            mail_type=payload.mail_type,
+            status="queued",
+            total_recipients=len(members),
+            processed_count=0,
+            success_count=0,
+            failure_count=0,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        background_tasks.add_task(_process_bulk_mail_job, job.id, payload.model_dump())
+        return TpoMailActionResponse(
+            message=f"Bulk mail started for {len(members)} recipient(s).",
+            job_id=job.id,
+            status=job.status,
+            total_recipients=job.total_recipients,
+            processed_count=job.processed_count,
+            success_count=job.success_count,
+            failure_count=job.failure_count,
+        )
 
     settings = get_settings()
     mailer = MailService(settings)
-    sent_count = 0
-    for student in members:
-        subject, body = _render_subject_and_body(student)
+    student = members[0]
+    subject, body = _render_subject_and_body(payload, student, group)
+    try:
         mailer.send_email(to_email=student.email, subject=subject, body=body)
-        sent_count += 1
+    except (smtplib.SMTPException, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to send email to {student.email}. Check SMTP configuration and credentials.",
+        ) from exc
+    return TpoMailActionResponse(message=f"Sent {payload.mail_type} email to 1 recipient.")
 
-    return TpoMailActionResponse(message=f"Sent {payload.mail_type} email to {sent_count} recipient(s).")
+
+@router.get("/tpo/mail/{job_id}", response_model=TpoMailJobProgressResponse)
+def get_tpo_mail_job_progress(
+    job_id: int,
+    db: Session = Depends(get_db),
+    _tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoMailJobProgressResponse:
+    job = db.query(TpoMailJob).filter(TpoMailJob.id == job_id).one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Mail job not found.")
+    return _mail_job_to_progress_response(job)
 
 
 @router.post("/login", response_model=AuthTokenResponse)
@@ -646,9 +916,23 @@ def login_student(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthT
 @router.post("/tpo/login", response_model=TpoAuthTokenResponse)
 def login_tpo(payload: TpoLoginRequest) -> TpoAuthTokenResponse:
     settings = get_settings()
-    if payload.username != settings.tpo_username or payload.password != settings.tpo_password:
+    from app.database.database import SessionLocal
+
+    if payload.username != settings.tpo_username:
         raise HTTPException(status_code=401, detail="Invalid TPO credentials.")
     auth_service = AuthService(settings)
+    db = SessionLocal()
+    try:
+        settings_row = db.query(TpoSettings).filter(TpoSettings.tpo_username == payload.username).one_or_none()
+        if settings_row and settings_row.tpo_password_hash:
+            password_ok = auth_service.verify_password(payload.password, settings_row.tpo_password_hash)
+        else:
+            password_ok = payload.password == settings.tpo_password
+    finally:
+        db.close()
+    if not password_ok:
+        raise HTTPException(status_code=401, detail="Invalid TPO credentials.")
+
     access_token = auth_service.create_tpo_access_token(username=settings.tpo_username)
     return TpoAuthTokenResponse(
         access_token=access_token,
@@ -736,3 +1020,24 @@ async def match_students_with_jd(
         top_k=top_k,
     )
     return JDMatchResponse(jd=constraints, filters=filters, candidates=candidates)
+
+
+@router.post("/{id}/send-email")
+def send_student_email(
+    id: int,
+    subject: str | None = Form(None),
+    body: str | None = Form(None),
+    db: Session = Depends(get_db)
+) -> dict:
+    student = db.query(Student).filter(Student.id == id).one_or_none()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+    
+    from app.services.email_service import EmailService
+    service = EmailService()
+    success = service.send_single_email(student, subject, body)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to send email.")
+
+    return {"success": True, "message": f"Mail sent to {student.name}."}

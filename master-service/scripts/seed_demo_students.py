@@ -2,12 +2,48 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import hashlib
+import os
 import random
+import re
+
+import requests
 
 from sqlalchemy import text
 
 from app.database.database import SessionLocal
 from app.database.models import RawUpload, Student, StudentProfile
+
+
+def _testmail_namespace() -> str:
+    return (os.getenv("TESTMAIL_NAMESPACE") or "verifai").strip().lower()
+
+
+def _testmail_tag(entry: dict, index: int) -> str:
+    raw_roll = str(entry.get("roll_no") or f"user-{index + 1}").strip().lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", raw_roll).strip("-")
+    return slug or f"user-{index + 1}"
+
+
+def _deterministic_testmail_email(entry: dict, index: int) -> str:
+    return f"{_testmail_namespace()}.{_testmail_tag(entry, index)}@inbox.testmail.app"
+
+
+def _resolve_seed_email(entry: dict, index: int) -> str:
+    # API-first (namespace reachability check), fallback to deterministic format.
+    namespace = _testmail_namespace()
+    deterministic = _deterministic_testmail_email(entry, index)
+    api_key = (os.getenv("TESTMAIL_API_KEY") or "").strip()
+    if not api_key:
+        return deterministic
+
+    try:
+        url = f"https://api.testmail.app/api/json?apikey={api_key}&namespace={namespace}&live=true"
+        response = requests.get(url, timeout=6)
+        if response.ok:
+            return deterministic
+    except Exception:
+        pass
+    return deterministic
 
 DEMO_STUDENTS: list[dict] = [
     {
@@ -1748,13 +1784,14 @@ def reset_demo_tables() -> None:
 def upsert_demo_students() -> None:
     now = datetime.now(UTC)
     with SessionLocal() as db:
-        for entry in DEMO_STUDENTS:
+        for index, entry in enumerate(DEMO_STUDENTS):
             rng = _deterministic_rng(entry)
-            student = db.query(Student).filter(Student.email == entry["email"]).one_or_none()
+            generated_email = _resolve_seed_email(entry, index)
+            student = db.query(Student).filter(Student.roll_no == entry["roll_no"]).one_or_none()
             if student is None:
                 student = Student(
                     name=entry["name"],
-                    email=entry["email"],
+                    email=generated_email,
                     roll_no=entry["roll_no"],
                     password_hash="",
                     phone=entry["phone"],
@@ -1767,6 +1804,7 @@ def upsert_demo_students() -> None:
                 db.flush()
             else:
                 student.name = entry["name"]
+                student.email = generated_email
                 student.roll_no = entry["roll_no"]
                 student.phone = entry["phone"]
                 student.branch = entry["branch"]
