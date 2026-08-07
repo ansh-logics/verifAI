@@ -1,10 +1,211 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "darkMode": true,
   "gridEnabling": false,
-  "detailLevel": "All",
-  "tablePositions": [],
-  "tableGroupCollapseStates": [],
-  "stickyNoteLayouts": [],
-  "referencePaths": []
+  "currentViewName": null,
+  "defaultView": {
+    "detailLevel": "All",
+    "tablePositions": [
+      {
+        "name": "students",
+        "schemaName": "public",
+        "x": 12,
+        "y": 12
+      },
+      {
+        "name": "student_profiles",
+        "schemaName": "public",
+        "x": 855.6439262769527,
+        "y": -444.304419653095
+      },
+      {
+        "name": "raw_uploads",
+        "schemaName": "public",
+        "x": 775.21369155908,
+        "y": 317.68986966525176
+      },
+      {
+        "name": "placement_records",
+        "schemaName": "public",
+        "x": 1091.2209114658806,
+        "y": 569.7428644663524
+      },
+      {
+        "name": "tpo_analysis_groups",
+        "schemaName": "public",
+        "x": 181.53026669689498,
+        "y": 800.0294793855339
+      },
+      {
+        "name": "tpo_analysis_group_members",
+        "schemaName": "public",
+        "x": 1079.978515625,
+        "y": 1111
+      },
+      {
+        "name": "tpo_settings",
+        "schemaName": "public",
+        "x": 12,
+        "y": 12
+      },
+      {
+        "name": "tpo_mail_jobs",
+        "schemaName": "public",
+        "x": 1079.978515625,
+        "y": 1317
+      },
+      {
+        "name": "tpo_group_rounds",
+        "schemaName": "public",
+        "x": 1079.978515625,
+        "y": 1907
+      },
+      {
+        "name": "tpo_group_round_members",
+        "schemaName": "public",
+        "x": 1772.264218840566,
+        "y": -52.64377608506288
+      }
+    ],
+    "tableGroupCollapseStates": [],
+    "stickyNoteLayouts": [],
+    "referencePaths": [
+      {
+        "firstFieldNames": [
+          "student_id"
+        ],
+        "firstTableName": "student_profiles",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "students",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "student_id"
+        ],
+        "firstTableName": "raw_uploads",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "students",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "student_id"
+        ],
+        "firstTableName": "placement_records",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "students",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "group_id"
+        ],
+        "firstTableName": "tpo_analysis_group_members",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "tpo_analysis_groups",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "student_id"
+        ],
+        "firstTableName": "tpo_analysis_group_members",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "students",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "group_id"
+        ],
+        "firstTableName": "tpo_mail_jobs",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "tpo_analysis_groups",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "group_id"
+        ],
+        "firstTableName": "tpo_group_rounds",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "tpo_analysis_groups",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "round_id"
+        ],
+        "firstTableName": "tpo_group_round_members",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "tpo_group_rounds",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "student_id"
+        ],
+        "firstTableName": "tpo_group_round_members",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "id"
+        ],
+        "secondTableName": "students",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      }
+    ]
+  },
+  "views": {}
 }

@@ -341,7 +341,56 @@ export interface TpoOverviewResponse {
   unplaced_eligible_students: number;
   active_groups: number;
   placed_students: number;
+  internships_count: number;
   recent_placements: TpoOverviewRecentPlacement[];
+}
+
+export type TpoReportFormat = "pdf" | "docx" | "csv" | "xlsx";
+
+export interface TpoReportGroupRow {
+  group_id: number;
+  title: string;
+  company_name: string;
+  role_type: string;
+  total_members: number;
+  current_round_no: number;
+  total_rounds: number;
+  qualified_count: number;
+  rejected_count: number;
+  pending_count: number;
+  round_state: string;
+  created_at: string;
+}
+
+export interface TpoReportPlacementRow {
+  student_id: number;
+  name: string;
+  email: string;
+  roll_no: string;
+  branch: string;
+  company_name: string;
+  offer_type: string;
+  pay_amount: number | null;
+  updated_at: string;
+}
+
+export interface TpoReportPreviewResponse {
+  generated_at: string;
+  generated_by: string;
+  institute_name: string;
+  overview: TpoOverviewResponse;
+  groups: TpoReportGroupRow[];
+  placements: TpoReportPlacementRow[];
+}
+
+export interface TpoReportPlacementPayUpdateRequest {
+  pay_amount: number | null;
+}
+
+export interface TpoReportPlacementPayUpdateResponse {
+  student_id: number;
+  pay_amount: number | null;
+  updated_at: string;
 }
 
 export interface FormDataState {

@@ -244,6 +244,16 @@ class PlacementMarkRequest(BaseModel):
         return v
 
 
+class TpoReportPlacementPayUpdateRequest(BaseModel):
+    pay_amount: float | None = Field(default=None, ge=0)
+
+
+class TpoReportPlacementPayUpdateResponse(BaseModel):
+    student_id: int
+    pay_amount: float | None = None
+    updated_at: datetime
+
+
 class TpoGroupCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     jd_summary: str | None = Field(default=None, max_length=5000)
@@ -465,7 +475,50 @@ class TpoOverviewResponse(BaseModel):
     unplaced_eligible_students: int
     active_groups: int
     placed_students: int
+    internships_count: int = 0
     recent_placements: list[TpoOverviewRecentPlacement] = Field(default_factory=list)
+
+
+class TpoReportGroupRow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    group_id: int
+    title: str
+    company_name: str
+    role_type: str
+    total_members: int
+    current_round_no: int
+    total_rounds: int
+    qualified_count: int
+    rejected_count: int
+    pending_count: int
+    round_state: str
+    created_at: datetime
+
+
+class TpoReportPlacementRow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    student_id: int
+    name: str
+    email: str
+    roll_no: str
+    branch: str
+    company_name: str
+    offer_type: str
+    pay_amount: float | None = None
+    updated_at: datetime
+
+
+class TpoReportPreviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    generated_at: datetime
+    generated_by: str
+    institute_name: str
+    overview: TpoOverviewResponse
+    groups: list[TpoReportGroupRow] = Field(default_factory=list)
+    placements: list[TpoReportPlacementRow] = Field(default_factory=list)
 
 
 class JDParsedConstraints(BaseModel):

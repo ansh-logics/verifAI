@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
@@ -73,3 +73,18 @@ def get_current_tpo_user(
     if not isinstance(subject, str) or not subject.strip():
         raise HTTPException(status_code=401, detail="Invalid token subject.")
     return subject.strip()
+
+
+def get_current_tpo_user_or_api_key(
+    token: Annotated[str | None, Depends(get_optional_bearer_token)],
+    x_tpo_api_key: Annotated[str | None, Header(alias="x-tpo-api-key")] = None,
+) -> str:
+    # Prefer bearer auth when present.
+    if token:
+        return get_current_tpo_user(token)
+
+    settings = get_settings()
+    if x_tpo_api_key and x_tpo_api_key == settings.tpo_api_key:
+        return settings.tpo_username
+
+    raise HTTPException(status_code=401, detail="Not authenticated.")

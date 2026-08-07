@@ -215,6 +215,23 @@ class ProfileService:
         return None
 
     @staticmethod
+    def _parse_pay_amount(value: str | None) -> float | None:
+        if value is None:
+            return None
+        raw = value.strip()
+        if not raw:
+            return None
+        # Accept common free-form inputs like "12 LPA", "30000/month", "5.5".
+        match = re.search(r"(\d+(?:\.\d+)?)", raw.replace(",", ""))
+        if match is None:
+            return None
+        try:
+            parsed = float(match.group(1))
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed >= 0 else None
+
+    @staticmethod
     def _assert_identity_and_anomalies(student: Student, payload: StudentProfileCreate) -> None:
         submitted = payload.student
         if submitted.email.strip().lower() != student.email.strip().lower():
@@ -610,6 +627,7 @@ class ProfileService:
             raise HTTPException(status_code=404, detail="Student not found.")
         group_company_name: str | None = None
         group_role_type: str | None = None
+        group_pay_or_stipend: str | None = None
         if group_id is not None:
             group = self.db.query(TpoAnalysisGroup).filter(TpoAnalysisGroup.id == group_id).one_or_none()
             if group is None:
@@ -626,6 +644,7 @@ class ProfileService:
                 raise HTTPException(status_code=400, detail="Student is not eligible for placement in this round.")
             group_company_name = (group.company_name or "").strip() or None
             group_role_type = self._normalize_offer_type(group.role_type)
+            group_pay_or_stipend = (group.pay_or_stipend or "").strip() or None
             if group_company_name is None:
                 raise HTTPException(status_code=400, detail="Group company is missing. Recreate group with company context.")
 
@@ -638,6 +657,9 @@ class ProfileService:
             resolved_offer_type = "job"
         if resolved_offer_type not in {"internship", "job"}:
             raise HTTPException(status_code=400, detail="offer_type must be internship or job.")
+        resolved_pay_amount = pay_amount
+        if resolved_pay_amount is None and group_id is not None:
+            resolved_pay_amount = self._parse_pay_amount(group_pay_or_stipend)
 
         student_record = (
             self.db.query(PlacementRecord)
@@ -649,7 +671,7 @@ class ProfileService:
                 student_id=student_id,
                 company_name=resolved_company,
                 offer_type=resolved_offer_type,
-                pay_amount=pay_amount,
+                pay_amount=resolved_pay_amount,
                 notes=(notes or "").strip() or None,
                 is_active=True,
             )
@@ -657,10 +679,29 @@ class ProfileService:
         else:
             student_record.company_name = resolved_company
             student_record.offer_type = resolved_offer_type
-            student_record.pay_amount = pay_amount
+            student_record.pay_amount = resolved_pay_amount
             student_record.notes = (notes or "").strip() or None
             student_record.updated_at = datetime.now(UTC)
         self.db.commit()
         self.db.refresh(student_record)
         return student_record
+
+    def update_report_placement_pay(self, *, student_id: int, pay_amount: float | None) -> PlacementRecord:
+        student = self.db.query(Student).filter(Student.id == student_id).one_or_none()
+        if student is None:
+            raise HTTPException(status_code=404, detail="Student not found.")
+        placement = (
+            self.db.query(PlacementRecord)
+            .filter(PlacementRecord.student_id == student_id, PlacementRecord.is_active.is_(True))
+            .order_by(PlacementRecord.updated_at.desc(), PlacementRecord.id.desc())
+            .one_or_none()
+        )
+        if placement is None:
+            raise HTTPException(status_code=404, detail="Active placement record not found for student.")
+        placement.pay_amount = pay_amount
+        placement.updated_at = datetime.now(UTC)
+        self.db.add(placement)
+        self.db.commit()
+        self.db.refresh(placement)
+        return placement
 

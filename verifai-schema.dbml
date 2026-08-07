@@ -1,6 +1,6 @@
 Project verifai_master_service {
   database_type: "PostgreSQL"
-  Note: "Schema derived from master-service SQLAlchemy models."
+  Note: "Schema derived from master-service/app/database/models.py and verified against the local PostgreSQL schema. SQLAlchemy application-level defaults are documented as column defaults where applicable."
 }
 
 Table students {
@@ -14,6 +14,7 @@ Table students {
   cgpa float
   gender varchar(16) [not null]
   cgpa_verified boolean [not null, default: false]
+  has_active_backlog boolean [not null, default: false]
   created_at timestamptz [not null]
 
   indexes {
@@ -21,27 +22,30 @@ Table students {
     roll_no [name: "ix_students_roll_no_lookup"]
     branch [name: "ix_students_branch"]
     gender [name: "ix_students_gender"]
+    has_active_backlog [name: "ix_students_backlog"]
   }
 }
 
 Table student_profiles {
   id int [pk, increment]
   student_id int [not null, unique]
-  skills text[] [not null, note: "Primary skill array used for search/filter"]
+  skills text[] [not null, note: "Primary skill array used for search and filtering"]
   coding_persona varchar(128) [not null, default: ""]
   coding_score float [not null, default: 0]
   academic_score float [not null, default: 0]
   overall_score float [not null, default: 0]
-  github_data jsonb [not null, note: "Raw/normalized GitHub analyzer payload"]
-  leetcode_data jsonb [not null, note: "Raw/normalized LeetCode analyzer payload"]
-  resume_data jsonb [not null, note: "Raw/normalized resume analyzer payload"]
-  academic_data jsonb [not null, note: "Raw/normalized marksheet analyzer payload"]
-  skills_json json [not null, note: "JSON mirror of skills for portability"]
+  github_data jsonb [not null, note: "Raw or normalized GitHub analyzer payload"]
+  leetcode_data jsonb [not null, note: "Raw or normalized LeetCode analyzer payload"]
+  resume_data jsonb [not null, note: "Raw or normalized resume analyzer payload"]
+  academic_data jsonb [not null, note: "Raw or normalized marksheet analyzer payload"]
+  skills_json json [not null, note: "JSON mirror of skills for consumers that do not support PostgreSQL arrays"]
   last_analyzed_at timestamptz [not null]
 
   indexes {
     student_id [name: "ix_student_profiles_student_id", unique]
     (skills) [name: "ix_student_profiles_skills_gin", type: gin]
+    `lower(trim(github_data->>'username'))` [name: "ux_student_profiles_github_username", unique, note: "Partial unique index when the normalized username is not blank"]
+    `lower(trim(leetcode_data->>'username'))` [name: "ux_student_profiles_leetcode_username", unique, note: "Partial unique index when the normalized username is not blank"]
   }
 }
 
@@ -54,8 +58,139 @@ Table raw_uploads {
 
   indexes {
     student_id [name: "ix_raw_uploads_student_id"]
+    (student_id, uploaded_at, id) [name: "ix_raw_uploads_student_uploaded"]
+  }
+}
+
+Table placement_records {
+  id int [pk, increment]
+  student_id int [not null]
+  company_name varchar(255) [not null]
+  offer_type varchar(32) [not null, note: "Expected values: internship or job"]
+  pay_amount float
+  notes text
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    student_id [name: "ix_placement_records_student_id"]
+  }
+}
+
+Table tpo_analysis_groups {
+  id int [pk, increment]
+  title varchar(255) [not null]
+  jd_summary text
+  company_name varchar(255)
+  role_type varchar(32)
+  pay_or_stipend varchar(128)
+  duration varchar(128)
+  bond_details text
+  jd_topics json [not null, note: "Application default: empty list"]
+  jd_key_points json [not null, note: "Application default: empty list"]
+  interview_timezone varchar(64)
+  total_rounds int [not null, default: 1]
+  current_round_no int [not null, default: 1]
+  round_state varchar(32) [not null, default: "in_progress"]
+  created_by varchar(128) [not null]
+  created_at timestamptz [not null]
+}
+
+Table tpo_analysis_group_members {
+  id int [pk, increment]
+  group_id int [not null]
+  student_id int [not null]
+  added_at timestamptz [not null]
+
+  indexes {
+    group_id [name: "ix_tpo_analysis_group_members_group_id"]
+    student_id [name: "ix_tpo_analysis_group_members_student_id"]
+  }
+}
+
+Table tpo_settings {
+  id int [pk, increment]
+  tpo_username varchar(128) [not null, unique]
+  display_name varchar(255)
+  contact_number varchar(32)
+  institute_name varchar(255)
+  sender_name varchar(255)
+  reply_to_email varchar(255)
+  default_timezone varchar(64)
+  stale_group_reminder_enabled boolean [not null, default: true]
+  daily_queue_summary_enabled boolean [not null, default: true]
+  placement_update_confirmation_enabled boolean [not null, default: true]
+  tpo_password_hash varchar(255)
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    tpo_username [name: "ix_tpo_settings_tpo_username", unique]
+  }
+}
+
+Table tpo_mail_jobs {
+  id int [pk, increment]
+  group_id int [not null]
+  requested_by varchar(128) [not null]
+  mail_type varchar(64) [not null]
+  round_no int
+  outcome varchar(32)
+  status varchar(32) [not null, default: "queued"]
+  total_recipients int [not null, default: 0]
+  processed_count int [not null, default: 0]
+  success_count int [not null, default: 0]
+  failure_count int [not null, default: 0]
+  last_error text
+  started_at timestamptz
+  finished_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    group_id [name: "ix_tpo_mail_jobs_group_id"]
+    round_no [name: "ix_tpo_mail_jobs_round_no"]
+    status [name: "ix_tpo_mail_jobs_status"]
+  }
+}
+
+Table tpo_group_rounds {
+  id int [pk, increment]
+  group_id int [not null]
+  round_no int [not null]
+  status varchar(32) [not null, default: "in_progress"]
+  finalized_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    group_id [name: "ix_tpo_group_rounds_group_id"]
+    (group_id, round_no) [name: "ux_tpo_group_round_unique", unique]
+  }
+}
+
+Table tpo_group_round_members {
+  id int [pk, increment]
+  round_id int [not null]
+  student_id int [not null]
+  status varchar(32) [not null, default: "pending"]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    round_id [name: "ix_tpo_group_round_members_round_id"]
+    student_id [name: "ix_tpo_group_round_members_student_id"]
+    (round_id, student_id) [name: "ux_tpo_group_round_member_unique", unique]
   }
 }
 
 Ref: student_profiles.student_id > students.id [delete: cascade]
 Ref: raw_uploads.student_id > students.id [delete: cascade]
+Ref: placement_records.student_id > students.id [delete: cascade]
+Ref: tpo_analysis_group_members.group_id > tpo_analysis_groups.id [delete: cascade]
+Ref: tpo_analysis_group_members.student_id > students.id [delete: cascade]
+Ref: tpo_mail_jobs.group_id > tpo_analysis_groups.id [delete: cascade]
+Ref: tpo_group_rounds.group_id > tpo_analysis_groups.id [delete: cascade]
+Ref: tpo_group_round_members.round_id > tpo_group_rounds.id [delete: cascade]
+Ref: tpo_group_round_members.student_id > students.id [delete: cascade]

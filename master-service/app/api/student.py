@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -26,7 +26,12 @@ from app.database.models import (
     TpoGroupRoundMember,
     TpoSettings,
 )
-from app.dependencies.auth import get_current_student_id, get_current_tpo_user, get_optional_student_id
+from app.dependencies.auth import (
+    get_current_student_id,
+    get_current_tpo_user,
+    get_current_tpo_user_or_api_key,
+    get_optional_student_id,
+)
 from app.schemas.student import (
     AuthTokenResponse,
     JDMatchRequest,
@@ -50,6 +55,9 @@ from app.schemas.student import (
     TpoGroupResponse,
     TpoOverviewRecentPlacement,
     TpoOverviewResponse,
+    TpoReportPlacementPayUpdateRequest,
+    TpoReportPlacementPayUpdateResponse,
+    TpoReportPreviewResponse,
     TpoPasswordChangeRequest,
     TpoSettingsData,
     TpoSettingsResponse,
@@ -65,6 +73,7 @@ from app.services.master_service import analyze_student_profile, analyze_student
 from app.services.matching_service import run_jd_matching
 from app.services.profile_service import ProfileService
 from app.services.mail_service import MailService
+from app.services.report_export_service import TpoReportExportService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/student", tags=["student"])
@@ -838,6 +847,15 @@ def get_tpo_overview(
         .scalar()
         or 0
     )
+    internships_count = (
+        db.query(func.count(func.distinct(PlacementRecord.student_id)))
+        .filter(
+            PlacementRecord.is_active.is_(True),
+            PlacementRecord.offer_type.ilike("internship"),
+        )
+        .scalar()
+        or 0
+    )
 
     unplaced_eligible_students = (
         db.query(func.count(Student.id))
@@ -876,7 +894,102 @@ def get_tpo_overview(
         unplaced_eligible_students=unplaced_eligible_students,
         active_groups=active_groups,
         placed_students=placed_students,
+        internships_count=internships_count,
         recent_placements=recent_placements,
+    )
+
+
+@router.get("/tpo/reports/preview", response_model=TpoReportPreviewResponse)
+def get_tpo_report_preview(
+    group_id: int | None = Query(default=None, ge=1),
+    branch: str | None = Query(default=None, max_length=128),
+    placed_only: bool = Query(default=False),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    tpo_user: str = Depends(get_current_tpo_user_or_api_key),
+) -> TpoReportPreviewResponse:
+    report_service = TpoReportExportService(db)
+    payload = report_service.build_payload(
+        tpo_username=tpo_user,
+        group_id=group_id,
+        branch=branch,
+        placed_only=placed_only,
+        date_from=_parse_iso_datetime(date_from, "date_from"),
+        date_to=_parse_iso_datetime(date_to, "date_to"),
+    )
+    return TpoReportPreviewResponse(
+        generated_at=payload.generated_at,
+        generated_by=payload.generated_by,
+        institute_name=payload.institute_name,
+        overview=TpoOverviewResponse(
+            total_students=payload.overview.total_students,
+            unplaced_eligible_students=payload.overview.unplaced_eligible_students,
+            active_groups=payload.overview.active_groups,
+            placed_students=payload.overview.placed_students,
+            internships_count=payload.overview.internships_count,
+            recent_placements=[],
+        ),
+        groups=payload.groups,
+        placements=payload.placements,
+    )
+
+
+@router.get("/tpo/reports/export")
+def export_tpo_report(
+    format: str = Query(pattern="^(pdf|docx|csv|xlsx)$"),
+    group_id: int | None = Query(default=None, ge=1),
+    branch: str | None = Query(default=None, max_length=128),
+    placed_only: bool = Query(default=False),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    tpo_user: str = Depends(get_current_tpo_user_or_api_key),
+) -> Response:
+    report_service = TpoReportExportService(db)
+    payload = report_service.build_payload(
+        tpo_username=tpo_user,
+        group_id=group_id,
+        branch=branch,
+        placed_only=placed_only,
+        date_from=_parse_iso_datetime(date_from, "date_from"),
+        date_to=_parse_iso_datetime(date_to, "date_to"),
+    )
+    timestamp = payload.generated_at.strftime("%Y%m%d_%H%M%S")
+    if format == "csv":
+        content = report_service.export_csv(payload)
+        filename = f"tpo_report_{timestamp}.csv"
+        media_type = "text/csv"
+    elif format == "xlsx":
+        content = report_service.export_xlsx(payload)
+        filename = f"tpo_report_{timestamp}.xlsx"
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif format == "docx":
+        content = report_service.export_docx(payload)
+        filename = f"tpo_report_{timestamp}.docx"
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    else:
+        content = report_service.export_pdf(payload)
+        filename = f"tpo_report_{timestamp}.pdf"
+        media_type = "application/pdf"
+
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return Response(content=content, media_type=media_type, headers=headers)
+
+
+@router.put("/tpo/reports/placements/{student_id}/pay", response_model=TpoReportPlacementPayUpdateResponse)
+def update_tpo_report_placement_pay(
+    student_id: int,
+    payload: TpoReportPlacementPayUpdateRequest,
+    db: Session = Depends(get_db),
+    _tpo_user: str = Depends(get_current_tpo_user_or_api_key),
+) -> TpoReportPlacementPayUpdateResponse:
+    service = ProfileService(db)
+    updated = service.update_report_placement_pay(student_id=student_id, pay_amount=payload.pay_amount)
+    return TpoReportPlacementPayUpdateResponse(
+        student_id=updated.student_id,
+        pay_amount=updated.pay_amount,
+        updated_at=updated.updated_at,
     )
 
 
@@ -1250,6 +1363,18 @@ def _mail_job_to_progress_response(job: TpoMailJob) -> TpoMailJobProgressRespons
         created_at=job.created_at,
         updated_at=job.updated_at,
     )
+
+
+def _parse_iso_datetime(value: str | None, field_name: str) -> datetime | None:
+    if value is None or not value.strip():
+        return None
+    raw = value.strip()
+    try:
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        return datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}. Use ISO format.") from exc
 
 
 def _filter_round_recipients(

@@ -250,7 +250,10 @@ export default function TpoDashboardRootPage() {
                       <div key={`${placement.student_id}-${placement.updated_at}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-3">
                         <p className="text-sm font-semibold text-slate-900">{placement.name}</p>
                         <p className="text-xs text-slate-600">{placement.company_name} · {placement.offer_type}</p>
-                        <p className="text-xs text-slate-500">{placement.pay_amount ? `Pay ${placement.pay_amount}` : "Pay not captured"} · {new Date(placement.updated_at).toLocaleDateString()}</p>
+                        <p className="text-xs text-slate-500">
+                          {placement.pay_amount !== null ? `Pay ${placement.pay_amount}` : "Pay not captured"} ·{" "}
+                          {new Date(placement.updated_at).toLocaleDateString()}
+                        </p>
                       </div>
                     ))
                   )}

@@ -92,12 +92,15 @@ export default function PlacementGroupsPage() {
           </Card>
         ) : (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {sortedGroups.map((group) => (
+            {sortedGroups.map((group) => {
+              const companyLabel = group.company_name?.trim() || "Unknown Company";
+              const groupLabel = group.title?.trim() || "Untitled Group";
+              return (
               <Link key={group.id} href={`/tpo/placement-groups/${group.id}`}>
                 <Card className="h-full hover:shadow-md transition-shadow border-slate-200/70">
                   <CardHeader className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-lg">{group.title}</CardTitle>
+                      <CardTitle className="text-lg">{companyLabel} / {groupLabel}</CardTitle>
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="gap-1">
                           <Users className="h-3.5 w-3.5" />
@@ -137,7 +140,8 @@ export default function PlacementGroupsPage() {
                   </CardContent>
                 </Card>
               </Link>
-            ))}
+              );
+            })}
           </section>
         )}
       </div>

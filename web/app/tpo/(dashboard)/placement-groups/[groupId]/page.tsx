@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import type {
   TpoGroup,
+  TpoGroupMember,
   TpoMailJobProgressResponse,
   TpoMailType,
   TpoRoundMailPreviewResponse,
@@ -56,6 +57,17 @@ export default function PlacementGroupDetailPage() {
   const [interviewDate, setInterviewDate] = useState("");
   const [interviewStart, setInterviewStart] = useState("");
   const [interviewEnd, setInterviewEnd] = useState("");
+  const [individualMailOpen, setIndividualMailOpen] = useState(false);
+  const [individualMailStudent, setIndividualMailStudent] = useState<TpoGroupMember | null>(null);
+  const [individualMailing, setIndividualMailing] = useState(false);
+  const [individualMailType, setIndividualMailType] = useState<TpoMailType>("shortlist_notice");
+  const [individualCustomSubject, setIndividualCustomSubject] = useState("");
+  const [individualCustomBody, setIndividualCustomBody] = useState("");
+  const [individualAdditionalNote, setIndividualAdditionalNote] = useState("");
+  const [individualPrepTopicsText, setIndividualPrepTopicsText] = useState("");
+  const [individualInterviewDate, setIndividualInterviewDate] = useState("");
+  const [individualInterviewStart, setIndividualInterviewStart] = useState("");
+  const [individualInterviewEnd, setIndividualInterviewEnd] = useState("");
 
   const groupId = useMemo(() => Number(params.groupId), [params.groupId]);
   const bulkStatusLabel = useMemo(() => {
@@ -184,32 +196,60 @@ export default function PlacementGroupDetailPage() {
     }
   };
 
-  const sendIndividualMail = async (studentId: number) => {
-    if (!group) return;
-    setMailing(true);
+  const openIndividualMailComposer = (student: TpoGroupMember) => {
+    setIndividualMailStudent(student);
+    setIndividualMailType(mailType);
+    setIndividualCustomSubject(customSubject);
+    setIndividualCustomBody(customBody);
+    setIndividualAdditionalNote(additionalNote);
+    setIndividualPrepTopicsText(prepTopicsText);
+    setIndividualInterviewDate(interviewDate);
+    setIndividualInterviewStart(interviewStart);
+    setIndividualInterviewEnd(interviewEnd);
+    setIndividualMailOpen(true);
+  };
+
+  const closeIndividualMailComposer = () => {
+    if (individualMailing) return;
+    setIndividualMailOpen(false);
+    setIndividualMailStudent(null);
+  };
+
+  const sendIndividualMail = async () => {
+    if (!group || !individualMailStudent) return;
+    if (
+      individualMailType === "process_custom" &&
+      (!individualCustomSubject.trim() || !individualCustomBody.trim())
+    ) {
+      toast.error("Custom template requires both subject and body.");
+      return;
+    }
+    setIndividualMailing(true);
     try {
       const result = await triggerTpoMailAction({
         group_id: group.id,
         mode: "individual",
-        mail_type: mailType,
-        student_id: studentId,
+        mail_type: individualMailType,
+        student_id: individualMailStudent.student_id,
         round_no: roundState?.round_no,
-        subject: customSubject || undefined,
-        body: customBody || undefined,
-        additional_note: additionalNote || undefined,
-        prep_topics: prepTopicsText
+        subject: individualCustomSubject || undefined,
+        body: individualCustomBody || undefined,
+        additional_note: individualAdditionalNote || undefined,
+        prep_topics: individualPrepTopicsText
           .split(",")
           .map((topic) => topic.trim())
           .filter(Boolean),
-        interview_date: interviewDate || undefined,
-        interview_time_start: interviewStart || undefined,
-        interview_time_end: interviewEnd || undefined,
+        interview_date: individualInterviewDate || undefined,
+        interview_time_start: individualInterviewStart || undefined,
+        interview_time_end: individualInterviewEnd || undefined,
       });
       toast.success(result.message);
+      setIndividualMailOpen(false);
+      setIndividualMailStudent(null);
     } catch (err) {
       toast.error(getApiErrorMessage(err));
     } finally {
-      setMailing(false);
+      setIndividualMailing(false);
     }
   };
 
@@ -347,12 +387,13 @@ export default function PlacementGroupDetailPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 rounded-[2rem] w-full h-full">
-      <div className="mx-auto w-full max-w-7xl space-y-6">
-        <div className="flex items-center justify-between">
+    <div className="flex-1 overflow-y-auto p-8 rounded-[2rem] w-full h-full pb-10">
+      <div className="mx-auto w-full max-w-7xl space-y-8">
+        <div className="rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">{group.title}</h1>
-            <p className="text-sm text-slate-600">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{group.title}</h1>
+            <p className="mt-1 text-sm text-slate-600">
               Created by {group.created_by} on {new Date(group.created_at).toLocaleString()}
             </p>
             <p className="text-sm text-slate-600">
@@ -367,9 +408,9 @@ export default function PlacementGroupDetailPage() {
               Bond: <span className="font-medium">{group.bond_details || "Not captured"}</span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 self-start">
             <Link href="/tpo/placement-groups">
-              <Button variant="outline" className="h-9 rounded-full px-4 border-slate-200 text-slate-600 hover:bg-slate-50">
+              <Button variant="outline" className="h-9 rounded-full px-4 border-slate-200 text-slate-700 hover:bg-slate-50">
                 Back to groups
               </Button>
             </Link>
@@ -382,11 +423,12 @@ export default function PlacementGroupDetailPage() {
             </Button>
           </div>
         </div>
+        </div>
 
         {bulkMailJob ? (
-          <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
-            <CardHeader>
-              <CardTitle>Bulk Mail Progress</CardTitle>
+          <Card className="bg-white rounded-3xl border border-slate-200/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-base text-slate-900">Bulk Mail Progress</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between text-sm text-slate-600">
@@ -408,18 +450,18 @@ export default function PlacementGroupDetailPage() {
           </Card>
         ) : null}
 
-        <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
-          <CardHeader>
-            <CardTitle>JD Summary</CardTitle>
+        <Card className="bg-white rounded-3xl border border-slate-200/60 shadow-sm">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="text-base text-slate-900">JD Summary</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-slate-700 whitespace-pre-wrap">
             {group.jd_summary?.trim() || "No JD summary provided."}
           </CardContent>
         </Card>
 
-        <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
-          <CardHeader>
-            <CardTitle>Mail Composer</CardTitle>
+        <Card className="bg-white rounded-3xl border border-slate-200/60 shadow-sm">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="text-base text-slate-900">Mail Composer</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 md:grid-cols-2">
@@ -492,9 +534,9 @@ export default function PlacementGroupDetailPage() {
         </Card>
 
         {roundState ? (
-          <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
-            <CardHeader>
-              <CardTitle>
+          <Card className="bg-white rounded-3xl border border-slate-200/60 shadow-sm">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-base text-slate-900">
                 Round {roundState.round_no} of {roundState.total_rounds}
               </CardTitle>
             </CardHeader>
@@ -512,7 +554,7 @@ export default function PlacementGroupDetailPage() {
                 <Button
                   onClick={() => void finalizeCurrentRound()}
                   disabled={finalizingRound || roundState.status === "finalized"}
-                  className="h-9 rounded-full px-4 bg-slate-900 hover:bg-slate-800 text-white"
+                  className="h-9 rounded-full px-4 bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   {finalizingRound ? "Finalizing..." : "Finalize round"}
                 </Button>
@@ -531,11 +573,11 @@ export default function PlacementGroupDetailPage() {
           </Card>
         ) : null}
 
-        <Card className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm">
-          <CardHeader>
-            <CardTitle>Group Members ({visibleMembers.length})</CardTitle>
+        <Card className="bg-white rounded-3xl border border-slate-200/60 shadow-sm">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="text-base text-slate-900">Group Members ({visibleMembers.length})</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -566,9 +608,9 @@ export default function PlacementGroupDetailPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => void sendIndividualMail(member.student_id)}
-                          disabled={mailing || bulkPolling}
-                          className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
+                          onClick={() => openIndividualMailComposer(member)}
+                          disabled={mailing || bulkPolling || individualMailing}
+                          className="h-8 rounded-full px-3 border-slate-200 text-slate-700 hover:bg-slate-50"
                         >
                           Mail
                         </Button>
@@ -579,7 +621,7 @@ export default function PlacementGroupDetailPage() {
                               variant="outline"
                               onClick={() => void updateRoundStatus(member.student_id, "qualified")}
                               disabled={updatingRoundStudentId === member.student_id}
-                              className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
+                              className="h-8 rounded-full px-3 border-slate-200 text-slate-700 hover:bg-slate-50"
                             >
                               Qualify
                             </Button>
@@ -588,7 +630,7 @@ export default function PlacementGroupDetailPage() {
                               variant="outline"
                               onClick={() => void updateRoundStatus(member.student_id, "rejected")}
                               disabled={updatingRoundStudentId === member.student_id}
-                              className="h-8 rounded-full px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
+                              className="h-8 rounded-full px-3 border-slate-200 text-slate-700 hover:bg-slate-50"
                             >
                               Reject
                             </Button>
@@ -613,6 +655,103 @@ export default function PlacementGroupDetailPage() {
           </CardContent>
         </Card>
       </div>
+      {individualMailOpen && individualMailStudent ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold text-slate-900">Send individual mail</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                To <span className="font-medium">{individualMailStudent.name}</span> ({individualMailStudent.email})
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <select
+                  value={individualMailType}
+                  onChange={(e) => setIndividualMailType(e.target.value as TpoMailType)}
+                  className="h-9 w-full rounded-full bg-slate-50 border border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  <option value="shortlist_notice">Shortlist notice</option>
+                  <option value="prep_topics">Preparation topics</option>
+                  <option value="interview_schedule">Interview schedule</option>
+                  <option value="round_invite">Round invite</option>
+                  <option value="round_result">Round result (qualified/rejected)</option>
+                  <option value="process_custom">Custom process mail</option>
+                </select>
+                <Input
+                  placeholder="Additional note (optional)"
+                  value={individualAdditionalNote}
+                  onChange={(e) => setIndividualAdditionalNote(e.target.value)}
+                  className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 placeholder:text-slate-400"
+                />
+              </div>
+              {individualMailType === "prep_topics" ? (
+                <Input
+                  placeholder="Prep topics (comma separated)"
+                  value={individualPrepTopicsText}
+                  onChange={(e) => setIndividualPrepTopicsText(e.target.value)}
+                  className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 placeholder:text-slate-400"
+                />
+              ) : null}
+              {individualMailType === "interview_schedule" ? (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Input
+                    type="date"
+                    value={individualInterviewDate}
+                    onChange={(e) => setIndividualInterviewDate(e.target.value)}
+                    className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700"
+                  />
+                  <Input
+                    type="time"
+                    value={individualInterviewStart}
+                    onChange={(e) => setIndividualInterviewStart(e.target.value)}
+                    className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700"
+                  />
+                  <Input
+                    type="time"
+                    value={individualInterviewEnd}
+                    onChange={(e) => setIndividualInterviewEnd(e.target.value)}
+                    className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700"
+                  />
+                </div>
+              ) : null}
+              {individualMailType === "process_custom" ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Custom subject"
+                    value={individualCustomSubject}
+                    onChange={(e) => setIndividualCustomSubject(e.target.value)}
+                    className="h-9 rounded-full bg-slate-50 border-transparent hover:bg-slate-100 px-4 text-sm font-medium text-slate-700 placeholder:text-slate-400"
+                  />
+                  <Textarea
+                    value={individualCustomBody}
+                    onChange={(e) => setIndividualCustomBody(e.target.value)}
+                    placeholder="Custom body (supports {student_name}, {company_name})"
+                    className="min-h-[100px] w-full rounded-2xl bg-slate-50 border-transparent hover:bg-slate-100 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400"
+                  />
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={closeIndividualMailComposer}
+                disabled={individualMailing}
+                className="h-9 rounded-full px-4 border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void sendIndividualMail()}
+                disabled={individualMailing}
+                className="h-9 rounded-full px-4 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {individualMailing ? "Sending..." : "Send mail"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

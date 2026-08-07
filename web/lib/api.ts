@@ -14,6 +14,10 @@ import type {
   TpoCreateGroupRequest,
   TpoChangePasswordRequest,
   TpoOverviewResponse,
+  TpoReportFormat,
+  TpoReportPlacementPayUpdateRequest,
+  TpoReportPlacementPayUpdateResponse,
+  TpoReportPreviewResponse,
   TpoSettingsData,
   TpoSettingsResponse,
   TpoAuthTokenResponse,
@@ -223,6 +227,65 @@ export async function getTpoOverview(tpoToken?: string | null): Promise<TpoOverv
   const { data } = await api.get<TpoOverviewResponse>("/student/tpo/overview", {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
+  return data;
+}
+
+export async function getTpoReportPreview(
+  params?: {
+    group_id?: number;
+    branch?: string;
+    placed_only?: boolean;
+    date_from?: string;
+    date_to?: string;
+  },
+  tpoToken?: string | null,
+): Promise<TpoReportPreviewResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.get<TpoReportPreviewResponse>("/student/tpo/reports/preview", {
+    params,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function downloadTpoReport(
+  format: TpoReportFormat,
+  params?: {
+    group_id?: number;
+    branch?: string;
+    placed_only?: boolean;
+    date_from?: string;
+    date_to?: string;
+  },
+  tpoToken?: string | null,
+): Promise<{ blob: Blob; filename: string }> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data, headers } = await api.get<Blob>("/student/tpo/reports/export", {
+    params: { format, ...params },
+    responseType: "blob",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  const rawContentDisposition = headers["content-disposition"];
+  const filenameMatch = rawContentDisposition?.match(/filename="?([^"]+)"?/i);
+  return {
+    blob: data,
+    filename: filenameMatch?.[1] ?? `tpo_report.${format}`,
+  };
+}
+
+export async function updateReportPlacementPay(
+  studentId: number,
+  body: TpoReportPlacementPayUpdateRequest,
+  tpoToken?: string | null,
+): Promise<TpoReportPlacementPayUpdateResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.put<TpoReportPlacementPayUpdateResponse>(
+    `/student/tpo/reports/placements/${studentId}/pay`,
+    body,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    },
+  );
   return data;
 }
 
