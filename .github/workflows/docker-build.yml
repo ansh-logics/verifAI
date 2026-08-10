@@ -96,7 +96,7 @@ jobs:
       - name: Build frontend
         run: npm run build
   validate-migrations:
-    name: Validate database migrations
+    name: Validate database and runtime
     runs-on: ubuntu-latest
 
     services:
@@ -149,3 +149,42 @@ jobs:
 
       - name: Display current revision
         run: alembic current
+
+      - name: Smoke test master service
+        run: |
+          uvicorn app.main:app \
+            --host 127.0.0.1 \
+            --port 8080 \
+            > /tmp/master-service.log 2>&1 &
+
+          service_pid=$!
+          trap 'kill "$service_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent \
+              http://127.0.0.1:8080/health \
+              --output /tmp/health-response.json
+            then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+
+          response = json.loads(
+              Path("/tmp/health-response.json").read_text()
+          )
+          assert response == {"status": "ok"}, response
+          print("Master service health check passed:", response)
+          PY
+              exit 0
+            fi
+
+            if ! kill -0 "$service_pid" 2>/dev/null; then
+              break
+            fi
+
+            sleep 2
+          done
+
+          echo "Master service failed to become healthy"
+          cat /tmp/master-service.log
+          exit 1
