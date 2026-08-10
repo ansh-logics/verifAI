@@ -32,6 +32,48 @@ jobs:
             --file "${{ matrix.service }}/Dockerfile.prod" \
             --tag "verifai-${{ matrix.service }}:ci" \
             "${{ matrix.service }}"
+      - name: Start production container
+        run: |
+          docker run \
+            --detach \
+            --name "verifai-${{ matrix.service }}-ci" \
+            --publish 8080:8080 \
+            "verifai-${{ matrix.service }}:ci"
+
+      - name: Smoke test production container
+        run: |
+          endpoint="/health"
+
+          if [ "${{ matrix.service }}" = "web" ]; then
+            endpoint="/"
+          fi
+
+          for attempt in $(seq 1 30); do
+            if curl \
+              --fail \
+              --silent \
+              --location \
+              "http://127.0.0.1:8080${endpoint}" \
+              > /dev/null
+            then
+              echo "${{ matrix.service }} container is healthy"
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "${{ matrix.service }} failed its container smoke test"
+          docker logs "verifai-${{ matrix.service }}-ci"
+          exit 1
+
+      - name: Remove production container
+        if: always()
+        run: |
+          docker rm \
+            --force \
+            "verifai-${{ matrix.service }}-ci" \
+            2>/dev/null || true
   test-python-services:
     name: Test ${{ matrix.service }}
     runs-on: ubuntu-latest
