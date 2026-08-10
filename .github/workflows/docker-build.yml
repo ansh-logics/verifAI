@@ -1,0 +1,23 @@
+name: VerifAI CI
+
+on:
+  push:
+
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-web:
+    name: Build web image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build production web image
+        run: |
+          docker build \
+            --file web/Dockerfile.prod \
+            --tag verifai-web:ci \
+            web
