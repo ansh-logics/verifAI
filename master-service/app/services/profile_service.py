@@ -315,10 +315,16 @@ class ProfileService:
             if payload.student.roll_no:
                 student.roll_no = payload.student.roll_no
 
-        profile = self.db.query(StudentProfile).filter(StudentProfile.student_id == student.id).one_or_none()
+        profile = (
+            self.db.query(StudentProfile)
+            .filter(StudentProfile.student_id == student.id)
+            .one_or_none()
+        )
+
         skills = normalize_skills(payload.skills)
         resume_data = payload.resume_data or {}
         academic_data = payload.academic_data or {}
+
         if profile is not None:
             existing_resume_name = (profile.resume_data or {}).get("file_name")
             existing_academic_name = (profile.academic_data or {}).get("file_name")
@@ -326,9 +332,22 @@ class ProfileService:
                 resume_data = {**resume_data, "file_name": existing_resume_name}
             if existing_academic_name and not academic_data.get("file_name"):
                 academic_data = {**academic_data, "file_name": existing_academic_name}
+
+        github_username = self._extract_platform_handle(
+            payload,
+            "github",
+        )
+
+        leetcode_username = self._extract_platform_handle(
+            payload,
+            "leetcode",
+        )
+
         if profile is None:
             profile = StudentProfile(
                 student_id=student.id,
+                github_username=github_username,
+                leetcode_username=leetcode_username,
                 skills=skills,
                 skills_json=skills,
                 coding_persona=payload.coding.persona,
@@ -344,6 +363,8 @@ class ProfileService:
             self.db.add(profile)
             self.db.flush()
         else:
+            profile.github_username = github_username
+            profile.leetcode_username = leetcode_username
             profile.skills = skills
             profile.skills_json = skills
             profile.coding_persona = payload.coding.persona

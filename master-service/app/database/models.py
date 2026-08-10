@@ -17,7 +17,7 @@ def utc_now() -> datetime:
 class Student(Base):
     __tablename__ = "students"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     roll_no: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
@@ -47,37 +47,132 @@ class Student(Base):
         back_populates="student",
         cascade="all, delete-orphan",
     )
+    __table_args__ = (
+        Index(
+            "ix_students_backlog",
+            "has_active_backlog",
+        ),
+    )
+
 
 
 class StudentProfile(Base):
     __tablename__ = "student_profiles"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), unique=True, nullable=False)
-    skills: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
-    coding_persona: Mapped[str] = mapped_column(String(128), nullable=False, default="")
-    coding_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    academic_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    overall_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    github_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    leetcode_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    resume_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    academic_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    # JSON mirror of skills for compatibility with consumers that don't support ARRAY well.
-    skills_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    last_analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
 
-    student: Mapped[Student] = relationship(back_populates="profile")
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+
+    github_username: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+
+    leetcode_username: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+
+    skills: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        default=list,
+    )
+
+    coding_persona: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="",
+    )
+
+    coding_score: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+    )
+
+    academic_score: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+    )
+
+    overall_score: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+    )
+
+    github_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    leetcode_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    resume_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    academic_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
+
+    skills_json: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+
+    last_analyzed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    student: Mapped[Student] = relationship(
+        back_populates="profile",
+    )
 
     __table_args__ = (
-        Index("ix_student_profiles_skills_gin", "skills", postgresql_using="gin"),
+        Index(
+            "ix_student_profiles_skills_gin",
+            "skills",
+            postgresql_using="gin",
+        ),
+        Index(
+            "ux_student_profiles_github_username",
+            "github_username",
+            unique=True,
+        ),
+        Index(
+            "ux_student_profiles_leetcode_username",
+            "leetcode_username",
+            unique=True,
+        ),
     )
 
 
 class RawUpload(Base):
     __tablename__ = "raw_uploads"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
     resume_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     marksheet_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
@@ -93,7 +188,7 @@ class RawUpload(Base):
 class PlacementRecord(Base):
     __tablename__ = "placement_records"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     offer_type: Mapped[str] = mapped_column(String(32), nullable=False)  # internship or job
@@ -109,7 +204,7 @@ class PlacementRecord(Base):
 class TpoAnalysisGroup(Base):
     __tablename__ = "tpo_analysis_groups"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     jd_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -143,7 +238,7 @@ class TpoAnalysisGroup(Base):
 class TpoAnalysisGroupMember(Base):
     __tablename__ = "tpo_analysis_group_members"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("tpo_analysis_groups.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
@@ -155,7 +250,7 @@ class TpoAnalysisGroupMember(Base):
 class TpoSettings(Base):
     __tablename__ = "tpo_settings"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tpo_username: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
 
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -178,7 +273,7 @@ class TpoSettings(Base):
 class TpoMailJob(Base):
     __tablename__ = "tpo_mail_jobs"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("tpo_analysis_groups.id", ondelete="CASCADE"), nullable=False, index=True)
     requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
     mail_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -201,7 +296,7 @@ class TpoMailJob(Base):
 class TpoGroupRound(Base):
     __tablename__ = "tpo_group_rounds"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("tpo_analysis_groups.id", ondelete="CASCADE"), nullable=False, index=True)
     round_no: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
@@ -223,7 +318,7 @@ class TpoGroupRound(Base):
 class TpoGroupRoundMember(Base):
     __tablename__ = "tpo_group_round_members"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     round_id: Mapped[int] = mapped_column(ForeignKey("tpo_group_rounds.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
