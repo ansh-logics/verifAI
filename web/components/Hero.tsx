@@ -143,7 +143,7 @@ export function Hero() {
                     <motion.div
                       key="actions"
                       initial={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8, width: 0, paddingLeft: 0, ObjectWidth: 0 }}
+                      exit={{ opacity: 0, scale: 0.8, width: 0, paddingLeft: 0 }}
                       className="flex gap-2 items-center"
                     >
                       <motion.button 

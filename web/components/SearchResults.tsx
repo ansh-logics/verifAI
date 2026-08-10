@@ -236,7 +236,7 @@ export default function SearchPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-sm text-slate-600">Search Results for</p>
-                    <p className="text-lg font-semibold text-slate-900">"{results.query}"</p>
+                    <p className="text-lg font-semibold text-slate-900">&quot;{results.query}&quot;</p>
                   </div>
                   <div className="text-right space-y-1">
                     <p className="text-3xl font-bold text-blue-700">{results.total_results}</p>
@@ -358,10 +358,10 @@ export default function SearchPage() {
             <div className="space-y-3 pt-4">
               <p className="text-sm text-slate-600 font-medium">Example searches:</p>
               <ul className="text-sm text-slate-600 space-y-2">
-                <li>🔹 Skills: "react", "python", "node.js"</li>
-                <li>🔹 Combined: "react node", "python ml"</li>
-                <li>🔹 Names: "amit", "john"</li>
-                <li>🔹 Typo-tolerant: "raect" → finds "react"</li>
+                <li>🔹 Skills: &quot;react&quot;, &quot;python&quot;, &quot;node.js&quot;</li>
+                <li>🔹 Combined: &quot;react node&quot;, &quot;python ml&quot;</li>
+                <li>🔹 Names: &quot;amit&quot;, &quot;john&quot;</li>
+                <li>🔹 Typo-tolerant: &quot;raect&quot; &rarr; finds &quot;react&quot;</li>
               </ul>
             </div>
           </CardContent>

@@ -297,7 +297,7 @@ export default function PlacementGroupDetailPage() {
     try {
       await markStudentPlacement({
         student_id: studentId,
-        group_id: group.id,
+        group_id: group?.id,
         pay_amount: null,
         notes: `Marked from Placement Group #${groupId}`,
       });
@@ -308,17 +308,17 @@ export default function PlacementGroupDetailPage() {
           members: prev.members.map((member) =>
             member.student_id === studentId
               ? {
-                  ...member,
-                  placement: {
-                    company_name: group.company_name || "N/A",
-                    offer_type: (group.role_type || "job") as "internship" | "job",
-                    pay_amount: null,
-                    notes: `Marked from Placement Group #${groupId}`,
-                    is_active: true,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  },
-                }
+                ...member,
+                placement: {
+                  company_name: group?.company_name || "N/A",
+                  offer_type: (group?.role_type || "job") as "internship" | "job",
+                  pay_amount: null,
+                  notes: `Marked from Placement Group #${groupId}`,
+                  is_active: true,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+              }
               : member,
           ),
         };
@@ -391,38 +391,38 @@ export default function PlacementGroupDetailPage() {
       <div className="mx-auto w-full max-w-7xl space-y-8">
         <div className="rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{group.title}</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Created by {group.created_by} on {new Date(group.created_at).toLocaleString()}
-            </p>
-            <p className="text-sm text-slate-600">
-              Company: <span className="font-medium">{group.company_name || "Not captured"}</span> · Role type:{" "}
-              <span className="font-medium">{group.role_type || "Not captured"}</span>
-            </p>
-            <p className="text-sm text-slate-600">
-              Pay/Stipend: <span className="font-medium">{group.pay_or_stipend || "Not captured"}</span> · Duration:{" "}
-              <span className="font-medium">{group.duration || "Not captured"}</span>
-            </p>
-            <p className="text-sm text-slate-600">
-              Bond: <span className="font-medium">{group.bond_details || "Not captured"}</span>
-            </p>
-          </div>
-          <div className="flex gap-2 self-start">
-            <Link href="/tpo/placement-groups">
-              <Button variant="outline" className="h-9 rounded-full px-4 border-slate-200 text-slate-700 hover:bg-slate-50">
-                Back to groups
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">{group.title}</h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Created by {group.created_by} on {new Date(group.created_at).toLocaleString()}
+              </p>
+              <p className="text-sm text-slate-600">
+                Company: <span className="font-medium">{group.company_name || "Not captured"}</span> · Role type:{" "}
+                <span className="font-medium">{group.role_type || "Not captured"}</span>
+              </p>
+              <p className="text-sm text-slate-600">
+                Pay/Stipend: <span className="font-medium">{group.pay_or_stipend || "Not captured"}</span> · Duration:{" "}
+                <span className="font-medium">{group.duration || "Not captured"}</span>
+              </p>
+              <p className="text-sm text-slate-600">
+                Bond: <span className="font-medium">{group.bond_details || "Not captured"}</span>
+              </p>
+            </div>
+            <div className="flex gap-2 self-start">
+              <Link href="/tpo/placement-groups">
+                <Button variant="outline" className="h-9 rounded-full px-4 border-slate-200 text-slate-700 hover:bg-slate-50">
+                  Back to groups
+                </Button>
+              </Link>
+              <Button
+                onClick={() => void sendBulkMail()}
+                disabled={mailing || bulkPolling}
+                className="h-9 rounded-full px-5 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              >
+                Bulk mail
               </Button>
-            </Link>
-            <Button
-              onClick={() => void sendBulkMail()}
-              disabled={mailing || bulkPolling}
-              className="h-9 rounded-full px-5 bg-blue-600 hover:bg-blue-700 text-white gap-2"
-            >
-              Bulk mail
-            </Button>
+            </div>
           </div>
-        </div>
         </div>
 
         {bulkMailJob ? (

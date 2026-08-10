@@ -219,7 +219,7 @@ export function LiveUseCase() {
            <div className="space-y-3 w-full mt-1">
              <div className="text-sm font-bold tracking-tight text-[#1d1d1f]">Recruiter Prompt</div>
              <div className="bg-white rounded-2xl p-5 text-[#86868b] font-mono text-[13px] leading-relaxed ring-1 ring-black/[0.04] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-               "Find top 5 students for a React Frontend Intern role. Must have &gt;8 CGPA, completed at least one full-stack project, and have an active GitHub. Rank by technical assessment score."
+               &quot;Find top 5 students for a React Frontend Intern role. Must have &gt;8 CGPA, completed at least one full-stack project, and have an active GitHub. Rank by technical assessment score.&quot;
              </div>
            </div>
         </div>
