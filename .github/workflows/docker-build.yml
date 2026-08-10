@@ -7,17 +7,28 @@ on:
     branches: ["main"]
 
 jobs:
-  build-web:
-    name: Build web image
+  build-images:
+    name: Build ${{ matrix.service }}
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - web
+          - master-service
+          - resume-analyzer
+          - coding-analyzer
+          - marksheet-analyzer
+          - jd-analyzer
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build production web image
+      - name: Build production image
         run: |
           docker build \
-            --file web/Dockerfile.prod \
-            --tag verifai-web:ci \
-            web
+            --file "${{ matrix.service }}/Dockerfile.prod" \
+            --tag "verifai-${{ matrix.service }}:ci" \
+            "${{ matrix.service }}"
