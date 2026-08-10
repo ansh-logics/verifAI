@@ -138,5 +138,14 @@ jobs:
       - name: Apply migrations
         run: alembic upgrade head
 
+      - name: Check models and migrations are synchronized
+        run: alembic check
+
+      - name: Downgrade all migrations
+        run: alembic downgrade base
+
+      - name: Reapply all migrations
+        run: alembic upgrade head
+
       - name: Display current revision
         run: alembic current
