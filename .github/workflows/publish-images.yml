@@ -1,0 +1,54 @@
+name: Publish Docker Images
+
+on:
+  workflow_run:
+    workflows: ["VerifAI CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-images:
+    name: Publish ${{ matrix.service }}
+    runs-on: ubuntu-latest
+
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - web
+          - master-service
+          - resume-analyzer
+          - coding-analyzer
+          - marksheet-analyzer
+          - jd-analyzer
+
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish production image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile.prod
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/verifai-${{ matrix.service }}:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ github.repository_owner }}/verifai-${{ matrix.service }}:latest
