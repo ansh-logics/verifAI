@@ -32,12 +32,19 @@ jobs:
             --file "${{ matrix.service }}/Dockerfile.prod" \
             --tag "verifai-${{ matrix.service }}:ci" \
             "${{ matrix.service }}"
+
       - name: Start production container
         run: |
+          container_port="8080"
+
+          if [ "${{ matrix.service }}" = "web" ]; then
+            container_port="3000"
+          fi
+
           docker run \
             --detach \
             --name "verifai-${{ matrix.service }}-ci" \
-            --publish 8080:8080 \
+            --publish "8080:${container_port}" \
             "verifai-${{ matrix.service }}:ci"
 
       - name: Smoke test production container
@@ -74,6 +81,7 @@ jobs:
             --force \
             "verifai-${{ matrix.service }}-ci" \
             2>/dev/null || true
+
   test-python-services:
     name: Test ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -110,6 +118,7 @@ jobs:
       - name: Run unit tests
         working-directory: ${{ matrix.service }}
         run: python -m unittest discover -s tests -v
+
   validate-frontend:
     name: Validate frontend
     runs-on: ubuntu-latest
@@ -137,6 +146,7 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
   validate-migrations:
     name: Validate database and runtime
     runs-on: ubuntu-latest
@@ -203,20 +213,13 @@ jobs:
           trap 'kill "$service_pid" 2>/dev/null || true' EXIT
 
           for attempt in $(seq 1 30); do
-            if curl --fail --silent \
+            if curl \
+              --fail \
+              --silent \
               http://127.0.0.1:8080/health \
               --output /tmp/health-response.json
             then
-              python - <<'PY'
-          import json
-          from pathlib import Path
-
-          response = json.loads(
-              Path("/tmp/health-response.json").read_text()
-          )
-          assert response == {"status": "ok"}, response
-          print("Master service health check passed:", response)
-          PY
+              python -c "import json; from pathlib import Path; response = json.loads(Path('/tmp/health-response.json').read_text()); assert response == {'status': 'ok'}, response; print('Master service health check passed:', response)"
               exit 0
             fi
 
